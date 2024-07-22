@@ -150,6 +150,21 @@ public class GameController : MonoBehaviour {
         int positionNumber = hit.collider.gameObject.GetComponent<Position>().number;
         Debug.Log($"選択されたマスの番号: {positionNumber}");
 
+        //もしpostionNumber == komaPosなら、駒を元の位置に戻し、移動処理は行わない
+        if (positionNumber == komaPos && komaPos != -1) {
+            // 駒を元の位置に戻す処理
+            ResetKomaPosition(hit);
+            Debug.Log("現在と同じ位置に駒を置くことはできません");
+            return;
+        }
+        //もしpostionNumberの位置のリストの最後尾の要素のサイズの絶対値が、選択された駒のサイズの絶対値より大きいなら、駒を置かずに処理を終了
+        if (Math.Abs(lastElementsArray[positionNumber]) > Math.Abs(komaSize)) {
+            // 駒を元の位置に戻す処理
+            ResetKomaPosition(hit);
+            Debug.Log("選択した駒より大きい駒の上に置くことはできません");
+            return;
+        }
+
         // 駒をマスの上に配置する処理（駒の底面がマスの上面に来るように調整）
         float komaHeight = selectedKoma.GetComponent<Collider>().bounds.size.y;
         Vector3 newPosition = hit.collider.transform.position;
@@ -168,6 +183,13 @@ public class GameController : MonoBehaviour {
         Put(state, op);
     }
 
+    // 駒を元の位置に戻す処理を共通化
+    void ResetKomaPosition(RaycastHit hit) {
+        Vector3 resetPosition = hit.collider.transform.position;
+        resetPosition.y += selectedKoma.GetComponent<Collider>().bounds.size.y / 2;
+        selectedKoma.transform.position = resetPosition;
+        selectedKoma = null;
+    }
 
     //駒を置ける場所のリストを計算する関数
     public List<int> GetAvailablePositonsList(State state) {
