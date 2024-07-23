@@ -119,7 +119,7 @@ public class GameController : MonoBehaviour {
         // マウスカーソルの位置に駒を追従させるために、カメラからの固定距離を保つ
         Vector3 mousePosition = Input.mousePosition;
         // カメラからの固定距離をスクリーン座標でのZ値として設定
-        mousePosition.z = 10.0f; // 例: カメラから10ユニットの距離
+        mousePosition.z = 10.0f;
         Vector3 newPosition = Camera.main.ScreenToWorldPoint(mousePosition);
 
         // CapsuleColliderを取得し、駒の高さを取得する
@@ -143,7 +143,7 @@ public class GameController : MonoBehaviour {
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
             PlaceSelectedKomaOnPosition(hit);
         }
-        selectedKoma = null; // 選択を解除
+        selectedKoma = null;
     }
 
     //駒を置く関数
@@ -156,7 +156,7 @@ public class GameController : MonoBehaviour {
         // 現在のターンに基づいて、先手または後手のプレイヤーの持ち駒を操作するための変数を定義
         Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
 
-        //もしpostionNumber == komaPos(移動前と後が同じ位置)なら、駒を元の位置に戻し、移動処理は行わない
+        //移動前と後が同じ位置なら、駒を元の位置に戻し、移動処理は行わない
         if (positionNumber == komaPos && komaPos != -1) {
             // 駒を元の位置に戻す処理
             ResetKomaPosition();
@@ -178,7 +178,7 @@ public class GameController : MonoBehaviour {
             }
             return;
         }
-        //もしpostionNumberの位置のリストの最後尾の要素のサイズの絶対値が、選択された駒のサイズの絶対値より大きいなら、駒を置かずに処理を終了
+        //移動先により大きい駒があるなら、駒を置かずに処理を終了
         if (Math.Abs(lastElementsArray[positionNumber]) >= Math.Abs(komaSize)) {
             //選択した駒の元の位置(komaPos)に戻す処理
             ResetKomaPosition();
@@ -294,7 +294,7 @@ public class GameController : MonoBehaviour {
             // 目標位置に駒を置く
             targetPosKomas.Add(op.koma);
             //lastElementsArrayに加える
-            lastElementsArray[op.targetPos] = op.koma;//更新
+            lastElementsArray[op.targetPos] = op.koma;
 
 
             //持ち駒の更新
@@ -345,8 +345,8 @@ public class GameController : MonoBehaviour {
         // 盤面の状態を解析してsenteArrayとgoteArrayを更新
         for (int i = 0; i < banmen.Count; i++) {
             int lastElement = 0;
+            // リストが空でない場合のみ、最後の要素を取得
             if (banmen[i].Count > 0) {
-                // リストが空でない場合のみ、最後の要素を取得
                 lastElement = banmen[i][banmen[i].Count - 1];
             }
 
@@ -385,7 +385,7 @@ public class GameController : MonoBehaviour {
         return GameResult.None;
     }
 
-    //
+    //ビンゴラインが揃っているかどうかを判定する関数
     private bool HasWinningLine(int[,] array) {
         // 縦、横の勝利条件をチェック
         for (int i = 0; i < 3; i++) {
