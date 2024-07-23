@@ -14,6 +14,8 @@ public class GameController : MonoBehaviour {
     private GameObject selectedKoma;//Unityで選択された駒を格納するための変数
     public LayerMask komaLayer; // Koma用のレイヤーマスク
     public LayerMask positionLayer;  // Position用のレイヤーマスク
+    private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
+
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -57,6 +59,8 @@ public class GameController : MonoBehaviour {
 
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
             selectedKoma = hit.collider.gameObject;
+            // 選択された駒の現在の位置を保存
+            originalPosition = selectedKoma.transform.position;
             Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
             int currentPlayer = state.turn % 2 == 1 ? 1 : -1;
             // 現在のターンに基づいて、先手または後手のプレイヤーの持ち駒を操作するための変数を定義
@@ -86,11 +90,11 @@ public class GameController : MonoBehaviour {
                 else {//選んだ駒が動かせる場合
                     //選択した駒が盤面の駒の時、その時の手番のプレイヤーの持ち駒リストに加える
                     if (komaPos != -1) {
+                        Debug.Log("選択した駒を持ち駒に追加します");
                         currentPlayerMochigoma.AddKoma(komaSize);
                         //移動元の位置のリストから最後尾の駒を削除
                         List<List<int>> banmen = state.banmen.GetBanmen();
-                        banmen[komaPos][banmen[komaPos].Count - 1] = 0;
-                        //盤面更新
+                        banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
 
                         //勝利判定
                         GameResult postMoveResult = CheckWinner(state);
@@ -148,20 +152,52 @@ public class GameController : MonoBehaviour {
         int komaSize = selectedKoma.GetComponent<Koma>().size;
         int komaPos = selectedKoma.GetComponent<Koma>().pos;
         int positionNumber = hit.collider.gameObject.GetComponent<Position>().number;
-        Debug.Log($"選択されたマスの番号: {positionNumber}");
 
-        //もしpostionNumber == komaPosなら、駒を元の位置に戻し、移動処理は行わない
+        // 現在のターンに基づいて、先手または後手のプレイヤーの持ち駒を操作するための変数を定義
+        Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
+
+        //もしpostionNumber == komaPos(移動前と後が同じ位置)なら、駒を元の位置に戻し、移動処理は行わない
         if (positionNumber == komaPos && komaPos != -1) {
             // 駒を元の位置に戻す処理
-            ResetKomaPosition(hit);
+            ResetKomaPosition();
             Debug.Log("現在と同じ位置に駒を置くことはできません");
+            currentPlayerMochigoma.RemoveKoma(komaSize);
+            
+            //持ち上げた駒はいったん削除されているので、元の位置に戻す処理を行う
+            List<List<int>> banmen = state.banmen.GetBanmen();
+            if (komaPos >= 0 && komaPos < banmen.Count) {
+                if (banmen[komaPos].Count > 0) {
+                    banmen[komaPos][banmen[komaPos].Count - 1] = komaSize;
+                }
+                else {
+                    banmen[komaPos].Add(komaSize); // リストが空の場合、新しい要素を追加
+                }
+            }
+            else {
+                Debug.LogError("komaPos is out of range: " + komaPos);
+            }
             return;
         }
         //もしpostionNumberの位置のリストの最後尾の要素のサイズの絶対値が、選択された駒のサイズの絶対値より大きいなら、駒を置かずに処理を終了
-        if (Math.Abs(lastElementsArray[positionNumber]) > Math.Abs(komaSize)) {
-            // 駒を元の位置に戻す処理
-            ResetKomaPosition(hit);
+        if (Math.Abs(lastElementsArray[positionNumber]) >= Math.Abs(komaSize)) {
+            //選択した駒の元の位置(komaPos)に戻す処理
+            ResetKomaPosition();
             Debug.Log("選択した駒より大きい駒の上に置くことはできません");
+            currentPlayerMochigoma.RemoveKoma(komaSize);
+
+            //持ち上げた駒はいったん削除されているので、元の位置に戻す処理を行う
+            List<List<int>> banmen = state.banmen.GetBanmen();
+            if (komaPos >= 0 && komaPos < banmen.Count) {
+                if (banmen[komaPos].Count > 0) {
+                    banmen[komaPos][banmen[komaPos].Count - 1] = komaSize;
+                }
+                else {
+                    banmen[komaPos].Add(komaSize); // リストが空の場合、新しい要素を追加
+                }
+            }
+            else {
+                Debug.LogError("komaPos is out of range: " + komaPos);
+            }
             return;
         }
 
@@ -184,11 +220,11 @@ public class GameController : MonoBehaviour {
     }
 
     // 駒を元の位置に戻す処理を共通化
-    void ResetKomaPosition(RaycastHit hit) {
-        Vector3 resetPosition = hit.collider.transform.position;
-        resetPosition.y += selectedKoma.GetComponent<Collider>().bounds.size.y / 2;
-        selectedKoma.transform.position = resetPosition;
-        selectedKoma = null;
+    void ResetKomaPosition() {
+        if (selectedKoma != null) {
+            selectedKoma.transform.position = originalPosition;
+            selectedKoma = null;
+        }
     }
 
     //駒を置ける場所のリストを計算する関数
@@ -308,8 +344,11 @@ public class GameController : MonoBehaviour {
 
         // 盤面の状態を解析してsenteArrayとgoteArrayを更新
         for (int i = 0; i < banmen.Count; i++) {
-            //banmen[i][banmen[i].Count - 1](各マスの最後の要素)が0でないならlastElementにそのまま代入、0なら0を代入
-            int lastElement = banmen[i][banmen[i].Count - 1] != 0 ? banmen[i][banmen[i].Count - 1] : 0;
+            int lastElement = 0;
+            if (banmen[i].Count > 0) {
+                // リストが空でない場合のみ、最後の要素を取得
+                lastElement = banmen[i][banmen[i].Count - 1];
+            }
 
             if (lastElement > 0) {
                 senteArray[i / 3, i % 3] = 1;
