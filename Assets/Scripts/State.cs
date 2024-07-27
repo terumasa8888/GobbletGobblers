@@ -7,11 +7,20 @@ public class State {
     public Mochigoma gote;
     public int turn;//経過ターン数
 
+    // 初期化用のコンストラクタ
     public State(Banmen banmen, Mochigoma sente, Mochigoma gote) {
-        this.banmen = new Banmen();
-        this.sente = new Mochigoma(3, 3, 2, 2, 1, 1);
-        this.gote = new Mochigoma(-3, -3, -2, -2, -1, -1);
+        this.banmen = banmen;
+        this.sente = sente;
+        this.gote = gote;
         this.turn = 1;
+    }
+
+    // コピーコンストラクタ
+    public State(State other) {
+        this.banmen = new Banmen(other.banmen);
+        this.sente = new Mochigoma(other.sente);
+        this.gote = new Mochigoma(other.gote);
+        this.turn = other.turn;
     }
 
     //turnをプラス1するメソッド
@@ -31,6 +40,13 @@ public class Banmen {
         }
     }
 
+    // コピーコンストラクタ
+    public Banmen(Banmen other) {
+        foreach (var row in other.banmen) {
+            this.banmen.Add(new List<int>(row));
+        }
+    }
+
     public List<List<int>> GetBanmen() {
         return banmen;
     }
@@ -40,10 +56,16 @@ public class Banmen {
 public class Mochigoma {
     //名前mochigomaListにするべき？？
     private List<int> mochigoma;//手持ちの駒
-                                //コンストラクタ
+
+    //コンストラクタ
     public Mochigoma(int koma1, int koma2, int koma3, int koma4, int koma5, int koma6) {
         this.mochigoma = new List<int> { koma1, koma2, koma3, koma4, koma5, koma6 };
     }
+    // コピーコンストラクタ
+    public Mochigoma(Mochigoma other) {
+        this.mochigoma = new List<int>(other.mochigoma);
+    }
+
     // リストを取得するメソッド
     public List<int> GetMochigoma() {
         return mochigoma;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -275,88 +276,76 @@ public class GameController : MonoBehaviour {
 
 
 
-    //駒を置く状態遷移関数
+    //駒を置いた後の状態を生成する状態遷移関数
     State Put(State state, Operator op) {
-        // op.targetPosがlastElementsArrayの範囲内にあるかどうかを確認
-        if (op.targetPos < 0 || op.targetPos >= lastElementsArray.Length) {
-            Debug.LogError("IndexOutOfRangeException: Index was outside the bounds of the array.");
-            //op.targetPosを表示
-            Debug.Log($"op.targetPos: {op.targetPos}");
-            return state; // 範囲外の場合は、処理を中断してstateをそのまま返す
+        // オペレータが有効かどうかをチェック
+        if (!IsValidMove(op)) {
+            throw new InvalidOperationException("Invalid move");
         }
 
-        //絶対値を比較して、op.komaがop.targetPosに置けるかどうかを判定
-        if (lastElementsArray[op.targetPos] < Math.Abs(op.koma)) {
-            // 盤面の状態を取得
-            List<List<int>> banmen = state.banmen.GetBanmen();
-            // 目標位置の駒リストを取得
-            List<int> targetPosKomas = banmen[op.targetPos];
-            // 目標位置に駒を置く
-            targetPosKomas.Add(op.koma);
-            //lastElementsArrayに加える
-            lastElementsArray[op.targetPos] = op.koma;
+        // 新しい状態を生成
+        State newState = new State(state);
+        // オペレータに基づいて駒を置く処理を行う      
+        // 盤面の状態を取得
+        List<List<int>> banmen = newState.banmen.GetBanmen();
+        // 目標位置の駒リストを取得
+        List<int> targetPosKomas = banmen[op.targetPos];
+        // 目標位置に駒を置く
+        targetPosKomas.Add(op.koma);
+        //lastElementsArrayに加える
+        lastElementsArray[op.targetPos] = op.koma;
 
-
-            //持ち駒の更新
-            if (state.turn % 2 == 1) {//先手の場合
-                for (int i = 0; i < state.sente.GetMochigoma().Count; i++) {
-                    if (state.sente.GetMochigoma()[i] == op.koma) {
-                        state.sente.GetMochigoma()[i] = 0;
-                        break;
-                    }
+        //持ち駒の更新
+        if (state.turn % 2 == 1) {//先手の場合
+            for (int i = 0; i < state.sente.GetMochigoma().Count; i++) {
+                if (state.sente.GetMochigoma()[i] == op.koma) {
+                    state.sente.GetMochigoma()[i] = 0;
+                    break;
                 }
             }
-            else {//後手の場合
-                for (int i = 0; i < state.gote.GetMochigoma().Count; i++) {
-                    if (state.gote.GetMochigoma()[i] == op.koma) {
-                        state.gote.GetMochigoma()[i] = 0;
-                        break;
-                    }
+        }
+        else {//後手の場合
+            for (int i = 0; i < state.gote.GetMochigoma().Count; i++) {
+                if (state.gote.GetMochigoma()[i] == op.koma) {
+                    state.gote.GetMochigoma()[i] = 0;
+                    break;
                 }
             }
-            //ターンを進める
-            state.NextTurn();
         }
-        else {
-            Debug.Log("その駒は置けません");
-        }
+
+        newState.NextTurn();
+
+        //ターンを進める
+        //state.NextTurn();//残す
+
         // 現在の盤面の状態をログに出力
         PrintCurrentBanmen(state);
 
+        //AIはPutを探索に使うので、勝利判定はいったんコメントアウト
         // 駒を置いた後の勝利判定
-        GameResult postMoveResult = CheckWinner(state);
+        /*GameResult postMoveResult = CheckWinner(state);
         if (postMoveResult != GameResult.None) {
             Debug.Log($"勝利判定の結果: {postMoveResult}");
-            return state; // 勝敗が決まった場合はここで処理を終了
-        }
+            return newState; // 勝敗が決まった場合はここで処理を終了
+        }*/
 
+        //AIはPutを探索に使うので、勝利判定はいったんコメントアウト
         // 駒を置ける場所のリストを再計算して表示
-        availablePositionsList = GetAvailablePositonsList(state);
-        return state;
+        //availablePositionsList = GetAvailablePositonsList(state);
+        return newState;
+    }
+
+    void ApplyMove(State newState) {
+        // 現在の状態を新しい状態に更新
+        this.state = newState;
+
+        // 現在の盤面の状態をログに出力
+        PrintCurrentBanmen(state);
     }
 
     //勝利判定を行う関数
     public GameResult CheckWinner(State state) {
-        int[,] senteArray = new int[3, 3];
-        int[,] goteArray = new int[3, 3];
-        // 盤面の状態を一時変数に格納
-        List<List<int>> banmen = state.banmen.GetBanmen();
-
-        // 盤面の状態を解析してsenteArrayとgoteArrayを更新
-        for (int i = 0; i < banmen.Count; i++) {
-            int lastElement = 0;
-            // リストが空でない場合のみ、最後の要素を取得
-            if (banmen[i].Count > 0) {
-                lastElement = banmen[i][banmen[i].Count - 1];
-            }
-
-            if (lastElement > 0) {
-                senteArray[i / 3, i % 3] = 1;
-            }
-            else if (lastElement < 0) {
-                goteArray[i / 3, i % 3] = 1;
-            }
-        }
+        var (senteArray, goteArray) = CreateBinaryArrays(state);
 
         // 勝利条件のチェック
         if (HasWinningLine(senteArray)) {
@@ -367,7 +356,8 @@ public class GameController : MonoBehaviour {
                 }
                 banmenOutput += "\n";
             }
-            Debug.Log($"先手の勝利盤面:\n{banmenOutput}");
+            //探索の際のリーチ潰し判定にも使うので、いったんコメントアウト
+            //Debug.Log($"先手の勝利盤面:\n{banmenOutput}");
             return GameResult.SenteWin;
         }
         else if (HasWinningLine(goteArray)) {
@@ -378,7 +368,8 @@ public class GameController : MonoBehaviour {
                 }
                 banmenOutput += "\n";
             }
-            Debug.Log($"後手の勝利盤面:\n{banmenOutput}");
+            //探索の際のリーチ潰し判定にも使うので、いったんコメントアウト
+            //Debug.Log($"後手の勝利盤面:\n{banmenOutput}");
             return GameResult.GoteWin;
         }
 
@@ -428,6 +419,185 @@ public class GameController : MonoBehaviour {
         Debug.Log($"現在の盤面:\n{banmenOutput}");
     }
 
-    //盤面を更新する関数
+
+    // オペレータが有効かどうかをチェックするメソッド
+    public bool IsValidMove(Operator op) {
+        //pos<0またはpos>=9の場合、IndexOutOfRangeExceptionをスロー
+        //グローバル変数lastElementsArrayは保守の観点から検討の必要あり
+        if (op.targetPos < 0 || op.targetPos >= lastElementsArray.Length) {
+            Debug.LogError("IndexOutOfRangeException: Index was outside the bounds of the array.");
+            return false; // 範囲外の場合は、処理を中断してstateをそのまま返す
+        }
+        //絶対値を比較して、op.komaがop.targetPosに置けるかどうかを判定
+        if (lastElementsArray[op.targetPos] < Math.Abs(op.koma)) {//置ける場合
+            return true;
+        }
+        else {//置けない場合
+            return false;
+        }
+    }
+
+    //AIがその手がリーチをつぶす手かどうかを判定する関数
+    public bool CheckBlockingMove(State currentState, Operator op) {
+
+        // 現在のStateをディープコピー
+        State simulatedState = new State(currentState);
+
+        // 仮に指定された位置にプレイヤーの駒を置き、Putの返り値を取得
+        simulatedState = Put(simulatedState, op);
+
+        // その状態でプレイヤーが勝利するかどうかをチェック
+        GameResult result = CheckWinner(simulatedState);
+
+        // プレイヤーが勝利する場合、その手はリーチ潰しと言えるのでtrueを返す
+        return result == GameResult.SenteWin;
+    }
+
+    //AIがリーチの数を計算する関数
+    public int CountReach(State currentState) {
+        int reachCount = 0;
+        
+        // 現在のStateをディープコピー
+        State simulatedState = new State(currentState);
+
+        // 仮に指定された位置にプレイヤーの駒を置き、Putの返り値を取得
+        simulatedState = Put(simulatedState, op);
+
+        // その状態のgoteArrayを取得
+        var (_, goteArray) = CreateBinaryArrays(simulatedState);
+        
+        //goteArrayのリーチの数を計算
+
+
+        //その状態で出来ている敵AIのリーチの数を計算
+        return reachCount;
+    }
+
+    private (int[,], int[,]) CreateBinaryArrays(State state) {
+        int[,] senteArray = new int[3, 3];
+        int[,] goteArray = new int[3, 3];
+        List<List<int>> banmen = state.banmen.GetBanmen();
+
+        for (int i = 0; i < banmen.Count; i++) {
+            int lastElement = 0;
+            if (banmen[i].Count > 0) {
+                lastElement = banmen[i][banmen[i].Count - 1];
+            }
+
+            if (lastElement > 0) {
+                senteArray[i / 3, i % 3] = 1;
+            }
+            else if (lastElement < 0) {
+                goteArray[i / 3, i % 3] = 1;
+            }
+        }
+
+        return (senteArray, goteArray);
+    }
+
+    State getNext(State state, int depth) {
+        // ルートノードを現在の状態で初期化
+        Node root = new Node(state, null, null);
+        // 偶数ターンはAIプレイヤー
+        bool isMaximizingPlayer = state.turn % 2 == 0;
+        // ミニマックスアルゴリズムを使用して最適な手を探索
+        Minimax(root, depth, isMaximizingPlayer);
+        Node bestMove = null;
+        int bestEval = int.MinValue;// 最適な評価値を初期化
+
+        // 子ノードをすべて調べて最適な手を見つける
+        foreach (Node child in root.children) {
+            if (child.eval > bestEval) {
+                bestEval = child.eval;
+                bestMove = child;
+            }
+        }
+
+        // 最適な手が見つかった場合、その状態を返す
+        return bestMove != null ? bestMove.state : state;
+    }
+
+    int Minimax(Node node, int depth, bool isMaximizingPlayer) {
+        // 探索の深さが0またはゲームが終了している場合、評価値を返す
+        if (depth == 0 || IsGameOver(node.state)) {
+            node.eval = EvaluateState(node); // そのノードの評価値を評価関数から計算
+            return node.eval;
+        }
+
+        // 敵AIが得点最大化プレイヤーの場合
+        if (isMaximizingPlayer) {
+            int maxEval = int.MinValue;
+            // すべての可能な次の状態を生成
+            foreach ((State childState, Operator op) in GetPossibleMoves(node.state)) {
+                // 子ノードを生成し、親ノードのstateとオペレータを渡す
+                Node childNode = new Node(childState, node.state, op);
+                // 親ノードのchildrenリストに子ノードを追加
+                node.children.Add(childNode);
+                // 再帰的にMinimaxを呼び出し、評価値を計算
+                int eval = Minimax(childNode, depth - 1, false);
+                // より大きい方をmaxEvalとし、最大評価値を更新
+                maxEval = Math.Max(maxEval, eval);
+            }
+            node.eval = maxEval;
+            return maxEval;
+        }
+        // 敵AIが得点最小化プレイヤーの場合
+        else {
+            int minEval = int.MaxValue;
+            // すべての可能な次の状態を生成
+            foreach ((State childState, Operator op) in GetPossibleMoves(node.state)) {
+                // 子ノードを生成し、親ノードのstateとオペレータを渡す
+                Node childNode = new Node(childState, node.state, op);
+                // 親ノードのchildrenリストに子ノードを追加
+                node.children.Add(childNode);
+                // 再帰的にMinimaxを呼び出し、評価値を計算
+                int eval = Minimax(childNode, depth - 1, true);
+                // より小さい方をminEvalとし、最小評価値を更新
+                minEval = Math.Min(minEval, eval);
+            }
+            node.eval = minEval;
+            return minEval;
+        }
+    }
+
+    // ゲームが終了しているかどうかを判定する関数
+    bool IsGameOver(State state) {
+        // 勝敗がついているかをチェックし結果を返す
+        return CheckWinner(state) != GameResult.None;
+    }
+
+    // 現在の状態から可能なすべての手を生成する関数
+    List<(State, Operator)> GetPossibleMoves(State state) {// 現在の状態から可能なすべての手を生成する
+        List<(State, Operator)> possibleMoves = new List<(State, Operator)>();
+        //引数State:root.state　ルートノードのstate
+        //返り値State:childState 考えられる手（子ノード）のstate
+        //返り値Operator:childStateに至るためのオペレータ
+
+        //置けるところリストについて、手持ちから作成できるopを全て作成
+        //現在の状態から考えられる1手先を全て生成し、possibleMovesに作成した状態とオペレータを追加することを繰り返す
+
+        return possibleMoves;
+    }
+
+    // 状態を評価する関数
+    int EvaluateState(Node node) {
+        State currentState = node.state; // 現在の状態を取得
+        State parentState = node.parentState; // 親ノードの状態を取得
+        //要は、opを使わないから逆算して求めようとしている
+        //でも、opを使えば簡単に求められるので、opを使うべき
+        //そうすれば、parentStateとopで、少ないコード量で評価関数を実現できる
+        //でも、持ち上げたら負ける場面は絶対に排除したい。敵のビンゴは-1000点とか
+
+
+
+        //parentStateとcurrentStateの盤面の差分からどこに駒を置いたのかのを取得
+
+        // 現在の状態と親ノードの状態を使用して評価するロジックを実装
+        // 例: 親ノードの状態を考慮して評価値を調整する
+
+        int evaluation = 0; // 評価値を初期化
+
+        return evaluation; // 評価値を返す
+    }
 
 }
