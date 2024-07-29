@@ -4026,6 +4026,13 @@ MonoBehaviour:
   positionLayer:
     serializedVersion: 2
     m_Bits: 128
+  goteKomas:
+  - {fileID: 360653972}
+  - {fileID: 1957413127}
+  - {fileID: 992522692}
+  - {fileID: 1322669126}
+  - {fileID: 904700640}
+  - {fileID: 1009484770}
 --- !u!4 &872412282
 Transform:
   m_ObjectHideFlags: 0
@@ -5880,7 +5887,7 @@ GameObject:
   - component: {fileID: 1389018811}
   - component: {fileID: 1389018812}
   m_Layer: 7
-  m_Name: Position
+  m_Name: Position (0)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
