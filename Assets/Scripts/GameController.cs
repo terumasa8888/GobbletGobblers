@@ -16,6 +16,7 @@ public class GameController : MonoBehaviour {
     public LayerMask komaLayer; // Koma用のレイヤーマスク
     public LayerMask positionLayer;  // Position用のレイヤーマスク
     private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
+    public GameObject[] goteKomas; // 駒のプレハブを格納する配列
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -31,7 +32,6 @@ public class GameController : MonoBehaviour {
         lastElementsArray = new int[9];
 
         availablePositionsList = GetAvailablePositonsList(state);
-
     }
 
     void Update() {
@@ -58,21 +58,24 @@ public class GameController : MonoBehaviour {
         // 勝利判定
         if (CheckWinner(state) != GameResult.None) {
             isGameOver = true;
+            Debug.Log("勝利判定: " + CheckWinner(state));
         }
     }
 
     void HandleAITurn() {
         // AIのターン処理
         Debug.Log("AIが駒を置こうとしています");
-        State newState = getNext(state, 2);
-        ApplyMove(newState);
-        UpdateMochigoma(state, op);
+        GetAvailablePositonsList(state);
+        //State newState = getNext(state, 2);
+        Node newNode = getNext(state, 2);
+        ApplyMove(newNode.state);
+        UpdateMochigoma(state, newNode.op);
 
         //駒オブジェクトを移動させる処理を追加
-        //MoveAIPiece(op);
+        MoveAIPiece(newNode.op);
 
         Debug.Log("AIが駒を置きました");
-        PrintCurrentBanmen(state);
+        //PrintCurrentBanmen(state);
     }
 
     // ドラッグ開始時に駒を選択する関数
@@ -98,7 +101,6 @@ public class GameController : MonoBehaviour {
                 komaSize = selectedKoma.GetComponent<Koma>().size;
                 komaPos = selectedKoma.GetComponent<Koma>().pos;
 
-                //AIも使える。ここから
                 // 持ち駒から置ける場所があるかどうかを判定
                 bool canPlaceFromMochigoma = availablePositionsList.Count > 0;
 
@@ -169,6 +171,7 @@ public class GameController : MonoBehaviour {
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.blue, 5.0f);
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
             //駒を置いて反映
+            GetAvailablePositonsList(state);
             PlaceSelectedKomaOnPosition(hit);
             UpdateMochigoma(state, op);
             //state.NextTurn();
@@ -211,6 +214,8 @@ public class GameController : MonoBehaviour {
         }
         //移動先により大きい駒があるなら、駒を置かずに処理を終了
         if (Math.Abs(lastElementsArray[positionNumber]) >= Math.Abs(komaSize)) {
+            //lastElementsArray[positionNumber]をログに出力
+            Debug.Log("lastElementsArray[positionNumber]: " + lastElementsArray[positionNumber]);
             //選択した駒の元の位置(komaPos)に戻す処理
             ResetKomaPosition();
             Debug.Log("選択した駒より大きい駒の上に置くことはできません");
@@ -250,6 +255,59 @@ public class GameController : MonoBehaviour {
 
         State newState = Put(state, op);
         ApplyMove(newState);
+    }
+
+    void MoveAIPiece(Operator op) {
+        int komaSize = op.koma;
+        int sourceNumber = op.sourcePos;
+        int positionNumber = op.targetPos;
+
+        // 位置の範囲チェック
+        if (positionNumber < 0 || positionNumber >= 9) {
+            Debug.LogError("positionNumber is out of range: " + positionNumber);
+            return;
+        }
+
+        // 駒を取得
+        GameObject koma = FindKoma(komaSize, sourceNumber);
+        if (koma == null) {
+            Debug.LogError("Koma not found.");
+            return;
+        }
+
+        // マスのオブジェクトを検索
+        GameObject positionObject = GameObject.Find("Position (" + positionNumber + ")");
+        if (positionObject == null) {
+            Debug.LogError("Position object not found: Position (" + positionNumber + ")");
+            return;
+        }
+
+        // 駒をマスの上に配置する処理（駒の底面がマスの上面に来るように調整）
+        float komaHeight = koma.GetComponent<Collider>().bounds.size.y;
+        Vector3 newPosition = positionObject.transform.position;
+        newPosition.y += komaHeight / 2;
+        koma.transform.position = newPosition;
+
+        Koma komaComponent = koma.GetComponent<Koma>();
+        komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
+
+        // lastElementsArray の更新
+        lastElementsArray[positionNumber] = komaSize;
+        Debug.Log("Updated lastElementsArray[" + positionNumber + "]: " + lastElementsArray[positionNumber]);
+    }
+
+    GameObject FindKoma(int size, int sourcePos) {
+        // goteKomas 配列内のすべての GameObject をチェック
+        foreach (GameObject komaObject in goteKomas) {
+            Koma koma = komaObject.GetComponent<Koma>();
+            if (koma != null && koma.pos == sourcePos && koma.size == size && koma.player == -1) {
+                return komaObject;
+            }
+        }
+
+        // 条件に合うKomaが見つからなかった場合
+        Debug.LogError("No matching Koma found.");
+        return null;
     }
 
     // 駒を元の位置に戻す処理を共通化
@@ -298,7 +356,7 @@ public class GameController : MonoBehaviour {
             Debug.Log("後手の持ち駒:" + string.Join(",", state.gote.GetMochigoma()));
         }
         // 駒を置ける場所のリストを表示
-        Debug.Log("置ける場所: " + string.Join(", ", availablePositionsList));
+        //Debug.Log("置ける場所: " + string.Join(", ", availablePositionsList));
 
         return availablePositionsList;
     }
@@ -341,6 +399,7 @@ public class GameController : MonoBehaviour {
         PrintCurrentBanmen(state);
     }
 
+    //なんか後手の持ち駒-3が3つあるから初期化か置くときの更新がおかしい
     private void UpdateMochigoma(State state, Operator op) {
         if (state.turn % 2 == 1) { // 先手の場合
             for (int i = 0; i < state.sente.GetMochigoma().Count; i++) {
@@ -544,26 +603,6 @@ public class GameController : MonoBehaviour {
         }
     }
 
-    //AIがその手がリーチをつぶす手かどうかを判定する関数
-    /*public bool CheckBlockingMove(State currentState, Operator op) {
-
-        // 現在のStateをディープコピー
-        State simulatedState = new State(currentState);
-
-        //オペレータの位置に、敵ではなくプレイヤーの駒を置く場合のオペレータを生成
-        //availablePositionsListは必要ないかもしれないので検討の余地あり
-        Operator simulatedOp = new Operator(availablePositionsList, op.targetPos, -op.koma);
-
-        // 仮に指定された位置にプレイヤーの駒を置き、Putの返り値を取得
-        simulatedState = Put(simulatedState, simulatedOp);
-
-        // その状態でプレイヤーが勝利するかどうかをチェック
-        GameResult result = CheckWinner(simulatedState);
-
-        // プレイヤーが勝利する場合、その手はリーチ潰しと言えるのでtrueを返す
-        return result == GameResult.SenteWin;
-    }*/
-
     //AIがリーチの数を計算する関数
     public int CountReach(State currentState) {
         int reachCount = 0;
@@ -665,7 +704,8 @@ public class GameController : MonoBehaviour {
         return blockedReaches;
     }
 
-    State getNext(State state, int depth) {
+
+    Node getNext(State state, int depth) {
         // ルートノードを現在の状態で初期化
         Node root = new Node(state, null, null);
         // 偶数ターンはAIプレイヤー
@@ -673,7 +713,7 @@ public class GameController : MonoBehaviour {
         // ミニマックスアルゴリズムを使用して最適な手を探索
         Minimax(root, depth, isMaximizingPlayer);
         Node bestMove = null;
-        int bestEval = int.MinValue;// 最適な評価値を初期化
+        int bestEval = int.MinValue; // 最適な評価値を初期化
 
         // 子ノードをすべて調べて最適な手を見つける
         foreach (Node child in root.children) {
@@ -683,8 +723,8 @@ public class GameController : MonoBehaviour {
             }
         }
 
-        // 最適な手が見つかった場合、その状態を返す
-        return bestMove != null ? bestMove.state : state;
+        // 最適な手が見つかった場合、そのノードを返す
+        return bestMove != null ? bestMove : root;
     }
 
     int Minimax(Node node, int depth, bool isMaximizingPlayer) {
@@ -738,9 +778,6 @@ public class GameController : MonoBehaviour {
     // 現在の状態から可能なすべての手を生成する関数
     List<(State, Operator)> GetPossibleMoves(State state) {
         List<(State, Operator)> possibleMoves = new List<(State, Operator)>();
-        //引数State:root.state　ルートノードのstate
-        //返り値State:childState 考えられる手（子ノード）のstate
-        //返り値Operator:childStateに至るためのオペレータ
 
         // 置ける場所のリストを取得
         List<int> availablePositions = GetAvailablePositonsList(state);
@@ -765,13 +802,7 @@ public class GameController : MonoBehaviour {
     int EvaluateState(Node node) {
         State currentState = node.state; // 現在の状態を取得
         State parentState = node.parentState; // 親ノードの状態を取得
-
         int evaluation = 0;
-
-        //リーチを潰す手の場合、+150点
-        /*if (CheckBlockingMove(currentState, node.op)) {
-            evaluation += 150;
-        }*/
 
         GameResult result = CheckWinner(currentState);
         //後手のビンゴラインが揃っている場合は1000点を加算
