@@ -40,7 +40,7 @@ public class GameController : MonoBehaviour {
         if (state.turn % 2 == 1) {
             // ドラッグ開始
             if (Input.GetMouseButtonDown(0)) {
-            HandlePieceSelection();
+                HandlePieceSelection();
             }
             // ドラッグ中に駒をマウスに追従させる
             if (Input.GetMouseButton(0) && selectedKoma != null) {
@@ -63,8 +63,16 @@ public class GameController : MonoBehaviour {
 
     void HandleAITurn() {
         // AIのターン処理
-        state = getNext(state, 3); // 深さ3でMinimaxアルゴリズムを使用して次の状態を取得
-        ApplyMove(state);
+        Debug.Log("AIが駒を置こうとしています");
+        State newState = getNext(state, 2);
+        ApplyMove(newState);
+        UpdateMochigoma(state, op);
+
+        //駒オブジェクトを移動させる処理を追加
+        //MoveAIPiece(op);
+
+        Debug.Log("AIが駒を置きました");
+        PrintCurrentBanmen(state);
     }
 
     // ドラッグ開始時に駒を選択する関数
@@ -160,7 +168,11 @@ public class GameController : MonoBehaviour {
         RaycastHit hit;
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.blue, 5.0f);
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
+            //駒を置いて反映
             PlaceSelectedKomaOnPosition(hit);
+            UpdateMochigoma(state, op);
+            //state.NextTurn();
+            Debug.Log("ターン数: " + state.turn);
         }
         selectedKoma = null;
     }
@@ -738,7 +750,7 @@ public class GameController : MonoBehaviour {
         // 置ける場所と手持ちの駒を組み合わせて可能な手を生成
         foreach (int pos in availablePositions) {
             foreach (int piece in mochigomas) {
-                Operator op = new Operator(new List<int>(), piece, pos);
+                Operator op = new Operator(new List<int>(), pos, piece);//List, targetPos, koma
                 if (IsValidMove(state, op)){
                     // 新しい状態を生成
                     State newState = Put(state, op);
