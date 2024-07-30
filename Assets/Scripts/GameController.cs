@@ -68,6 +68,8 @@ public class GameController : MonoBehaviour {
         GetAvailablePositonsList(state);
         //State newState = getNext(state, 2);
         Node newNode = getNext(state, 2);
+        //得られたノードの評価値をログに出力
+        Debug.Log("評価値: " + newNode.eval);
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
 
@@ -347,14 +349,14 @@ public class GameController : MonoBehaviour {
         }
 
         // 先手または後手のターンに応じたメッセージを表示
-        if (state.turn % 2 == 1) {
+        /*if (state.turn % 2 == 1) {
             //Debug.Log($"{state.turn}ターン目：先手の方は手を入力してください");
             Debug.Log("先手の持ち駒:" + string.Join(",", state.sente.GetMochigoma()));
         }
         else {
             //Debug.Log($"{state.turn}ターン目：後手の方は手を入力してください");
             Debug.Log("後手の持ち駒:" + string.Join(",", state.gote.GetMochigoma()));
-        }
+        }*/
         // 駒を置ける場所のリストを表示
         //Debug.Log("置ける場所: " + string.Join(", ", availablePositionsList));
 
@@ -594,11 +596,13 @@ public class GameController : MonoBehaviour {
 
         // 移動先が空きマスまたは覆える駒である場合
         if (targetStack.Count == 0 || CanCoverPiece(op.koma, targetStack[targetStack.Count - 1])) {
-            Debug.Log("Valid move: targetStack = " + (targetStack.Count == 0 ? "empty" : targetStack[targetStack.Count - 1].ToString()) + ", op.koma = " + op.koma);
+            //いったんコメントアウト
+            //Debug.Log("Valid move: targetStack = " + (targetStack.Count == 0 ? "empty" : targetStack[targetStack.Count - 1].ToString()) + ", op.koma = " + op.koma);
             return true;
         }
         else {
-            Debug.Log("Invalid move: targetStack = " + targetStack[targetStack.Count - 1] + ", op.koma = " + op.koma);
+            //いったんコメントアウト
+            //Debug.Log("Invalid move: targetStack = " + targetStack[targetStack.Count - 1] + ", op.koma = " + op.koma);
             return false;
         }
     }
@@ -704,6 +708,25 @@ public class GameController : MonoBehaviour {
         return blockedReaches;
     }
 
+    int GetPositionScore(int position) {
+        switch (position) {
+            case 0:
+            case 2:
+            case 6:
+            case 8:
+                return 100; // 四隅
+            case 4:
+                return 200; // 中央
+            case 1:
+            case 3:
+            case 5:
+            case 7:
+                return 50;  // その他
+            default:
+                return 0;   // 無効な位置
+        }
+    }
+
 
     Node getNext(State state, int depth) {
         // ルートノードを現在の状態で初期化
@@ -731,6 +754,7 @@ public class GameController : MonoBehaviour {
         // 探索の深さが0またはゲームが終了している場合、評価値を返す
         if (depth == 0 || IsGameOver(node.state)) {
             node.eval = EvaluateState(node); // そのノードの評価値を評価関数から計算
+            Debug.Log("Minimax (depth 0 or game over): " + node.eval); // デバッグログを追加
             return node.eval;
         }
 
@@ -749,6 +773,7 @@ public class GameController : MonoBehaviour {
                 maxEval = Math.Max(maxEval, eval);
             }
             node.eval = maxEval;
+            Debug.Log("Minimax (maximizing): " + node.eval); // デバッグログを追加
             return maxEval;
         }
         // 敵AIが得点最小化プレイヤーの場合
@@ -766,6 +791,7 @@ public class GameController : MonoBehaviour {
                 minEval = Math.Min(minEval, eval);
             }
             node.eval = minEval;
+            Debug.Log("Minimax (minimizing): " + node.eval); // デバッグログを追加
             return minEval;
         }
     }
@@ -823,7 +849,12 @@ public class GameController : MonoBehaviour {
         // currentStateにおける敵AIのリーチ数×25点evaluationに加算
         int reaches = CountReach(currentState);
         evaluation += reaches * 25;
+        // 置いたマス目ごとに点数を付ける
+        if (node.op != null) {
+            evaluation += GetPositionScore(node.op.targetPos);
+        }
 
+        Debug.Log("EvaluateState: " + evaluation); // デバッグログを追加
         return evaluation;
     }
 
