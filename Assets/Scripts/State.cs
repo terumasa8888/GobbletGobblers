@@ -76,8 +76,15 @@ public class Mochigoma {
     }
 
     // リストから駒を削除するメソッド
+    //返り値Bool？
     public bool RemoveKoma(int koma) {
-        return mochigoma.Remove(koma);
+        if (mochigoma.Contains(koma)) {
+            mochigoma.Remove(koma);
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 }
 
