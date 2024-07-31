@@ -50,6 +50,17 @@ public class Banmen {
     public List<List<int>> GetBanmen() {
         return banmen;
     }
+
+    public void SetBanmen(List<List<int>> newBanmen) {
+        banmen = newBanmen;
+    }
+
+    //banmenの行数を指定すればその行の最後尾を削除するメソッド
+    public void RemoveLast(int row) {
+        banmen[row].RemoveAt(banmen[row].Count - 1);
+    }
+
+
 }
 
 //持ち駒の状態を表すクラス

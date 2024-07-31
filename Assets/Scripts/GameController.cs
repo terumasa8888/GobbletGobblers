@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.UI;
@@ -63,12 +64,12 @@ public class GameController : MonoBehaviour {
         }
 
         // 勝利判定
-        if (CheckWinner(state) != GameResult.None) {
+        /*if (CheckWinner(state) != GameResult.None) {
             isGameOver = true;
             Debug.Log("勝利判定: " + CheckWinner(state));
             //その時の盤面をログに出力
             PrintCurrentBanmen(state);
-        }
+        }*/
     }
 
     void HandleAITurn() {
@@ -80,7 +81,7 @@ public class GameController : MonoBehaviour {
 
         if (newNode != null && newNode.op != null) {
             Debug.Log($"HandleAITurn: bestMove.op - sourcePos: {newNode.op.sourcePos}, targetPos: {newNode.op.targetPos}, koma: {newNode.op.koma}");
-            MoveAIPiece(newNode.op);
+            MoveAIPiece(newNode);
         }
         else {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
@@ -276,12 +277,22 @@ public class GameController : MonoBehaviour {
 
         State newState = Put(state, op);
         ApplyMove(newState);
+
+        //勝利判定
+        if (CheckWinner(state) != GameResult.None) {
+            isGameOver = true;
+            Debug.Log("勝利判定: " + CheckWinner(state));
+            //その時の盤面をログに出力
+            PrintCurrentBanmen(newState);/////
+        }
     }
 
-    void MoveAIPiece(Operator op) {
-        int komaSize = op.koma;
-        int sourceNumber = op.sourcePos;
-        int positionNumber = op.targetPos;
+    void MoveAIPiece(Node newNode) {
+        int komaSize = newNode.op.koma;
+        int sourceNumber = newNode.op.sourcePos;
+        int positionNumber = newNode.op.targetPos;
+
+        List<List<int>> banmen = newNode.state.banmen.GetBanmen();///////////////
 
         // デバッグ用ログ
         Debug.Log($"MoveAIPiece called with komaSize: {komaSize}, sourceNumber: {sourceNumber}, positionNumber: {positionNumber}");
@@ -313,6 +324,15 @@ public class GameController : MonoBehaviour {
             return;
         }
 
+        // sourceNumberが盤面の範囲内である場合にのみ、駒を削除し、下の駒を代入
+        if (sourceNumber >= 0 && sourceNumber < 9) {
+            // sourceNumberの位置から駒を削除することをログに出力
+            Debug.Log("Removing Koma from sourceNumber: " + sourceNumber);
+            RemoveKomaFromLastElementsArray(sourceNumber);//要は盤面からけせばいいんだから、いらんくね
+            //banmenのsourceNumber行の最後尾の駒を削除
+            banmen[sourceNumber].RemoveAt(banmen[sourceNumber].Count - 1);
+        }
+
         // 駒をマスの上に配置する処理（駒の底面がマスの上面に来るように調整）
         float komaHeight = koma.GetComponent<Collider>().bounds.size.y;
         Vector3 newPosition = positionObject.transform.position;
@@ -321,12 +341,55 @@ public class GameController : MonoBehaviour {
 
         komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
 
-        // lastElementsArray の更新
-        lastElementsArray[positionNumber] = komaSize;
+        lastElementsArray[positionNumber] = komaSize;//////
+        GetAvailablePositonsList(state);
         //Debug.Log("Updated lastElementsArray[" + positionNumber + "]: " + lastElementsArray[positionNumber]);
+
+
+        // stateの盤面情報を更新
+
+        banmen[positionNumber].Add(komaSize);//ここはいけてる
+        newNode.state.banmen.SetBanmen(banmen);
+
     }
 
-    GameObject FindKoma(int size, int sourcePos) {
+    void RemoveKomaFromLastElementsArray(int position) {
+        List<List<int>> banmen = state.banmen.GetBanmen();
+        if (position < 0 || position >= banmen.Count) {
+            Debug.LogError("Position is out of range: " + position);
+            return;
+        }
+
+        List<int> column = banmen[position];
+        if (column.Count > 0) {
+            int removedKoma = column[column.Count - 1];
+            column.RemoveAt(column.Count - 1); // 最後の駒を削除
+            Debug.Log("Removed koma: " + removedKoma + " from position: " + position);
+
+            if (column.Count > 0) {
+                lastElementsArray[position] = column[column.Count - 1]; // 下の駒を代入
+                Debug.Log("Updated lastElementsArray[" + position + "]: " + lastElementsArray[position]);
+            }
+            else {
+                lastElementsArray[position] = 0; // 駒がなくなった場合は0を代入
+                Debug.Log("No more pieces at position: " + position);
+            }
+
+            // stateの盤面情報を更新
+            state.banmen.SetBanmen(banmen);
+            //banmenは9つのリストからなるので、9行に分けてログに出力
+            for (int i = 0; i < banmen.Count; i++) {
+                Debug.Log($"banmen[{i}]: " + string.Join(", ", banmen[i]));
+            }
+        }
+        else {
+            Debug.LogError("No pieces to remove at position: " + position);
+        }
+
+        GetAvailablePositonsList(state);
+    }
+
+        GameObject FindKoma(int size, int sourcePos) {
         // goteKomas 配列内のすべての GameObject をチェック
         foreach (GameObject komaObject in goteKomas) {
             Koma koma = komaObject.GetComponent<Koma>();
@@ -340,30 +403,6 @@ public class GameController : MonoBehaviour {
         // 条件に合うKomaが見つからなかった場合
         Debug.LogError("No matching Koma found.");
         return null;
-        /*if (sourcePos == -1) {
-            // 持ち駒から駒を見つける
-            foreach (GameObject koma in goteKomas) {
-                Koma komaComponent = koma.GetComponent<Koma>();
-                Debug.Log($"Checking hand: koma.size: {komaComponent.size}, size: {size}, koma.pos: {komaComponent.pos}, sourcePos: {sourcePos}");
-                if (komaComponent.size == size && komaComponent.pos == -1) {
-                    return koma;
-                }
-            }
-            Debug.LogError("FindKoma: No matching Koma found in hand.");
-            return null;
-        }
-        else {
-            // 盤面から駒を見つける
-            foreach (GameObject koma in goteKomas) {
-                Koma komaComponent = koma.GetComponent<Koma>();
-                Debug.Log($"Checking board: koma.size: {komaComponent.size}, size: {size}, koma.pos: {komaComponent.pos}, sourcePos: {sourcePos}");
-                if (komaComponent.size == size && komaComponent.pos == sourcePos) {
-                    return koma;
-                }
-            }
-            Debug.LogError("FindKoma: No matching Koma found on board.");
-            return null;
-        }*/
     }
 
     // 駒を元の位置に戻す処理を共通化
@@ -402,17 +441,6 @@ public class GameController : MonoBehaviour {
             }
         }
 
-        // 先手または後手のターンに応じたメッセージを表示
-        /*if (state.turn % 2 == 1) {
-            //Debug.Log($"{state.turn}ターン目：先手の方は手を入力してください");
-            Debug.Log("先手の持ち駒:" + string.Join(",", state.sente.GetMochigoma()));
-        }
-        else {
-            //Debug.Log($"{state.turn}ターン目：後手の方は手を入力してください");
-            Debug.Log("後手の持ち駒:" + string.Join(",", state.gote.GetMochigoma()));
-        }*/
-        // 駒を置ける場所のリストを表示
-        //Debug.Log("置ける場所: " + string.Join(", ", availablePositionsList));
 
         return availablePositionsList;
     }
@@ -427,19 +455,27 @@ public class GameController : MonoBehaviour {
         State newState = new State(state);
         // オペレータに基づいて駒を置く処理を行う      
         List<List<int>> banmen = newState.banmen.GetBanmen();
+
+        // 駒を移動元から削除する処理を追加
+        if (op.sourcePos >= 0 && op.sourcePos < banmen.Count) {
+            if (banmen[op.sourcePos].Count > 0) {
+                banmen[op.sourcePos].RemoveAt(banmen[op.sourcePos].Count - 1);
+            }
+            else {
+                Debug.LogWarning("No pieces to remove at source position: " + op.sourcePos);
+            }
+        }
+        else {
+            Debug.LogWarning("Source position is out of range: " + op.sourcePos);
+        }
         // 駒を置く処理
         banmen[op.targetPos].Add(op.koma);
 
         //laseElementsArrayも、グローバル変数じゃなくメンバー変数で持つ必要がある?
         //てかこれいる？
-        lastElementsArray[op.targetPos] = op.koma;
-
-        //UpdateMochigoma(state, op);
+        //lastElementsArray[op.targetPos] = op.koma;
 
         newState.NextTurn();
-
-        // 現在の盤面の状態をログに出力
-        //PrintCurrentBanmen(state);
 
         return newState;
     }
@@ -447,9 +483,21 @@ public class GameController : MonoBehaviour {
     void ApplyMove(State newState) {
         // 現在の状態を新しい状態に更新
         this.state = newState;
+        lastElementsArray = new int[9];
+        for (int i = 0; i < 9; i++) {
+            List<int> column = state.banmen.GetBanmen()[i];
+            if (column.Count > 0) {
+                lastElementsArray[i] = column[column.Count - 1];
+            }
+            else {
+                lastElementsArray[i] = 0;
+            }
+        }
 
         // 現在の盤面の状態をログに出力
-        PrintCurrentBanmen(state);
+        PrintCurrentBanmen(newState);/////
+        //ここでlastElementsArrayもログに出力
+        Debug.Log("lastElementsArray: " + string.Join(", ", lastElementsArray));
     }
 
     //なんか後手の持ち駒-3が3つあるから初期化か置くときの更新がおかしい
@@ -573,46 +621,9 @@ public class GameController : MonoBehaviour {
 
     List<Operator> GetBoardOperators(State state, bool isMaximizingPlayer) {
 
-        // プレイヤーの駒のリストを取得
-        // List<int> playerPieces = isMaximizingPlayer ? state.gote.GetMochigoma() : state.sente.GetMochigoma();
-
-        // 盤面の状態を取得
-        // List<List<int>> board = state.banmen.GetBanmen();
-
-        // 盤面上の駒を動かす操作を生成
-        /*for (int pos = 0; pos < board.Count; pos++) {
-            List<int> cell = board[pos];
-            int piece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
-
-            if (playerPieces.Contains(piece)) {//
-                var possibleMoves = GetPossibleMovesForPiece(piece, pos, state);
-                foreach (var targetPos in possibleMoves) {
-                    operators.Add(new Operator(pos, targetPos, piece));
-                }
-            }
-        }*/
-
-
-        /*List<Operator> operators = new List<Operator>();
-        List<List<int>> banmen = state.banmen.GetBanmen();
-        int player = isMaximizingPlayer ? 1 : -1;
-
-        for (int i = 0; i < banmen.Count; i++) {
-            for (int j = 0; j < banmen[i].Count; j++) {
-                int piece = banmen[i][j];
-                if ((player > 0 && piece > 0) || (player < 0 && piece < 0)) {
-                    List<int> possibleMoves = GetPossibleMovesForPiece(piece, i, state);
-                    foreach (int move in possibleMoves) {
-                        operators.Add(new Operator(i, move, piece));//これのせい？
-                    }
-                }
-            }
-        }
-        return operators;*/
-
         List<Operator> operators = new List<Operator>();
         List<List<int>> banmen = state.banmen.GetBanmen();
-        int player = isMaximizingPlayer ? 1 : -1;
+        int player = isMaximizingPlayer ? -1 : 1;//ここが逆だった！！！！！！
 
         // lastElementsArrayを更新
         int[] lastElementsArray = new int[banmen.Count];
@@ -876,11 +887,18 @@ public class GameController : MonoBehaviour {
         int bestEval = int.MinValue; // 最適な評価値を初期化
 
         // 子ノードをすべて調べて最適な手を見つける
-        foreach (Node child in root.children) {
+        /*foreach (Node child in root.children) {
             if (child.eval > bestEval) {
                 bestEval = child.eval;
                 bestMove = child;
                 //bestMove.op = child.op;
+            }
+        }*/
+        foreach (Node child in root.children) {
+            if (child.eval == bestValue) {
+                bestMove = child;
+                //bestMove.op = child.op;
+                break;
             }
         }
 
@@ -970,7 +988,7 @@ public class GameController : MonoBehaviour {
     }
 
     // 現在の状態から可能なすべての手を生成する関数
-    List<(State, Operator)> GetPossibleMoves(State state, bool isMaximizingPlayer) {
+    List<(State, Operator)> GetPossibleMoves(State state, bool isMaximizingPlayer) {//////////
         List<(State, Operator)> possibleMoves = new List<(State, Operator)>();
 
         // 持ち駒から置ける場所のリストを取得
@@ -1111,11 +1129,11 @@ public class GameController : MonoBehaviour {
         foreach (var positions in positionsList) {
             if (IsReach(1, positions, currentState)) {
                 senteReachCount++;
-                Debug.Log($"Sente reach found at positions: {string.Join(", ", positions)}");
+                //Debug.Log($"Sente reach found at positions: {string.Join(", ", positions)}");
             }
             if (IsReach(-1, positions, currentState)) {
                 goteReachCount++;
-                Debug.Log($"Gote reach found at positions: {string.Join(", ", positions)}");
+                //Debug.Log($"Gote reach found at positions: {string.Join(", ", positions)}");
             }
         }
 
