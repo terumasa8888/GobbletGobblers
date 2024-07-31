@@ -16,7 +16,7 @@ public class GameController : MonoBehaviour {
     public LayerMask komaLayer; // Koma用のレイヤーマスク
     public LayerMask positionLayer;  // Position用のレイヤーマスク
     private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
-    public GameObject[] goteKomas; // 駒のプレハブを格納する配列
+    public GameObject[] goteKomas; // 駒を格納する配列
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -32,6 +32,13 @@ public class GameController : MonoBehaviour {
         lastElementsArray = new int[9];
 
         availablePositionsList = GetAvailablePositonsList(state);
+        // goteKomas 配列の初期化確認
+        if (goteKomas == null || goteKomas.Length == 0) {
+            Debug.LogError("goteKomas array is not initialized or empty.");
+        }
+        else {
+            Debug.Log($"goteKomas array initialized with {goteKomas.Length} elements.");
+        }
     }
 
     void Update() {
@@ -71,26 +78,22 @@ public class GameController : MonoBehaviour {
         //State newState = getNext(state, 2);
         Node newNode = getNext(state, 3);
 
-        // newNodeがnullでないことを確認
-        if (newNode == null) {
-            Debug.LogError("newNode is null in HandleAITurn");
-            return;
+        if (newNode != null && newNode.op != null) {
+            Debug.Log($"HandleAITurn: bestMove.op - sourcePos: {newNode.op.sourcePos}, targetPos: {newNode.op.targetPos}, koma: {newNode.op.koma}");
+            MoveAIPiece(newNode.op);
+        }
+        else {
+            Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
         }
 
-        // newNode.opがnullでないことを確認
-        if (newNode.op == null) {
-            Debug.LogError("newNode.op is null in HandleAITurn");
-            return;
-        }
-
-        EvaluateStateWithDebug(newNode);
+        EvaluateStateWithDebug(newNode);//デバッグ用
         //得られたノードの評価値をログに出力
         Debug.Log("評価値: " + newNode.eval);
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
 
         //駒オブジェクトを移動させる処理を追加
-        MoveAIPiece(newNode.op);//ここでなぜかop.komaが-3になる
+        //MoveAIPiece(newNode.op);//ここで適切にopが設定されていない？？
 
         //Debug.Log("AIが駒を置きました");
         //PrintCurrentBanmen(state);
@@ -280,6 +283,9 @@ public class GameController : MonoBehaviour {
         int sourceNumber = op.sourcePos;
         int positionNumber = op.targetPos;
 
+        // デバッグ用ログ
+        Debug.Log($"MoveAIPiece called with komaSize: {komaSize}, sourceNumber: {sourceNumber}, positionNumber: {positionNumber}");
+
         // 位置の範囲チェック
         if (positionNumber < 0 || positionNumber >= 9) {
             Debug.LogError("positionNumber is out of range: " + positionNumber);
@@ -290,6 +296,13 @@ public class GameController : MonoBehaviour {
         GameObject koma = FindKoma(komaSize, sourceNumber);//komaSizeがなぜかいつも-3
         if (koma == null) {
             Debug.LogError("Koma not found.");
+            return;
+        }
+
+        // 駒がAIのものであることを確認
+        Koma komaComponent = koma.GetComponent<Koma>();
+        if (komaComponent.player != -1) {
+            Debug.LogError("Koma does not belong to AI.");
             return;
         }
 
@@ -306,7 +319,6 @@ public class GameController : MonoBehaviour {
         newPosition.y += komaHeight / 2;
         koma.transform.position = newPosition;
 
-        Koma komaComponent = koma.GetComponent<Koma>();
         komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
 
         // lastElementsArray の更新
@@ -319,7 +331,7 @@ public class GameController : MonoBehaviour {
         foreach (GameObject komaObject in goteKomas) {
             Koma koma = komaObject.GetComponent<Koma>();
             //koma.posとsourcePos、koma.sizeとsizeを全てログに出力
-            //Debug.Log($"koma.pos: {koma.pos}, sourcePos: {sourcePos}, koma.size: {koma.size}, size: {size}");
+            Debug.Log($"koma.pos: {koma.pos}, sourcePos: {sourcePos}, koma.size: {koma.size}, size: {size}");
             if (koma != null && koma.pos == sourcePos && koma.size == size && koma.player == -1) {
                 return komaObject;
             }
@@ -328,6 +340,30 @@ public class GameController : MonoBehaviour {
         // 条件に合うKomaが見つからなかった場合
         Debug.LogError("No matching Koma found.");
         return null;
+        /*if (sourcePos == -1) {
+            // 持ち駒から駒を見つける
+            foreach (GameObject koma in goteKomas) {
+                Koma komaComponent = koma.GetComponent<Koma>();
+                Debug.Log($"Checking hand: koma.size: {komaComponent.size}, size: {size}, koma.pos: {komaComponent.pos}, sourcePos: {sourcePos}");
+                if (komaComponent.size == size && komaComponent.pos == -1) {
+                    return koma;
+                }
+            }
+            Debug.LogError("FindKoma: No matching Koma found in hand.");
+            return null;
+        }
+        else {
+            // 盤面から駒を見つける
+            foreach (GameObject koma in goteKomas) {
+                Koma komaComponent = koma.GetComponent<Koma>();
+                Debug.Log($"Checking board: koma.size: {komaComponent.size}, size: {size}, koma.pos: {komaComponent.pos}, sourcePos: {sourcePos}");
+                if (komaComponent.size == size && komaComponent.pos == sourcePos) {
+                    return koma;
+                }
+            }
+            Debug.LogError("FindKoma: No matching Koma found on board.");
+            return null;
+        }*/
     }
 
     // 駒を元の位置に戻す処理を共通化
@@ -398,9 +434,6 @@ public class GameController : MonoBehaviour {
         //てかこれいる？
         lastElementsArray[op.targetPos] = op.koma;
 
-        //ゲームの進行処理の中でAIの手が確定してから
-        //Put→getNext→ApplyMove→UpdateMochigomaの順で行う？
-        //いったんコメントアウト
         //UpdateMochigoma(state, op);
 
         newState.NextTurn();
@@ -430,7 +463,7 @@ public class GameController : MonoBehaviour {
         // 先手と後手の持ち駒を一つのログメッセージとして表示
         string senteMochigoma = "Current Sente Mochigoma: " + string.Join(", ", state.sente.GetMochigoma());
         string goteMochigoma = "Current Gote Mochigoma: " + string.Join(", ", state.gote.GetMochigoma());
-        //Debug.Log(senteMochigoma + "\n" + goteMochigoma);
+        Debug.Log(senteMochigoma + "\n" + goteMochigoma);
     }
 
     //勝利判定を行う関数
@@ -526,7 +559,7 @@ public class GameController : MonoBehaviour {
                 int targetPiece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
 
                 if (targetPiece == 0 || CanCoverPiece(koma, targetPiece)) {
-                    operators.Add(new Operator(null, pos, koma));
+                    operators.Add(new Operator(null, pos, koma));//これのせい？？
                 }
             }
         }
@@ -539,23 +572,65 @@ public class GameController : MonoBehaviour {
     }
 
     List<Operator> GetBoardOperators(State state, bool isMaximizingPlayer) {
-        List<Operator> operators = new List<Operator>();
 
         // プレイヤーの駒のリストを取得
-        List<int> playerPieces = isMaximizingPlayer ? state.gote.GetMochigoma() : state.sente.GetMochigoma();
+        // List<int> playerPieces = isMaximizingPlayer ? state.gote.GetMochigoma() : state.sente.GetMochigoma();
 
         // 盤面の状態を取得
-        List<List<int>> board = state.banmen.GetBanmen();
+        // List<List<int>> board = state.banmen.GetBanmen();
 
         // 盤面上の駒を動かす操作を生成
-        for (int pos = 0; pos < board.Count; pos++) {
+        /*for (int pos = 0; pos < board.Count; pos++) {
             List<int> cell = board[pos];
             int piece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
 
-            if (playerPieces.Contains(piece)) {
+            if (playerPieces.Contains(piece)) {//
                 var possibleMoves = GetPossibleMovesForPiece(piece, pos, state);
                 foreach (var targetPos in possibleMoves) {
                     operators.Add(new Operator(pos, targetPos, piece));
+                }
+            }
+        }*/
+
+
+        /*List<Operator> operators = new List<Operator>();
+        List<List<int>> banmen = state.banmen.GetBanmen();
+        int player = isMaximizingPlayer ? 1 : -1;
+
+        for (int i = 0; i < banmen.Count; i++) {
+            for (int j = 0; j < banmen[i].Count; j++) {
+                int piece = banmen[i][j];
+                if ((player > 0 && piece > 0) || (player < 0 && piece < 0)) {
+                    List<int> possibleMoves = GetPossibleMovesForPiece(piece, i, state);
+                    foreach (int move in possibleMoves) {
+                        operators.Add(new Operator(i, move, piece));//これのせい？
+                    }
+                }
+            }
+        }
+        return operators;*/
+
+        List<Operator> operators = new List<Operator>();
+        List<List<int>> banmen = state.banmen.GetBanmen();
+        int player = isMaximizingPlayer ? 1 : -1;
+
+        // lastElementsArrayを更新
+        int[] lastElementsArray = new int[banmen.Count];
+        for (int i = 0; i < banmen.Count; i++) {
+            if (banmen[i].Count > 0) {
+                lastElementsArray[i] = banmen[i][banmen[i].Count - 1];
+            }
+            else {
+                lastElementsArray[i] = 0; // 空の場合は0を設定
+            }
+        }
+
+        for (int i = 0; i < lastElementsArray.Length; i++) {
+            int piece = lastElementsArray[i];
+            if ((player > 0 && piece > 0) || (player < 0 && piece < 0)) {//これのせい？
+                List<int> possibleMoves = GetPossibleMovesForPiece(piece, i, state);
+                foreach (int move in possibleMoves) {
+                    operators.Add(new Operator(i, move, piece));
                 }
             }
         }
@@ -564,8 +639,6 @@ public class GameController : MonoBehaviour {
 
     List<int> GetPossibleMovesForPiece(int piece, int currentPos, State state) {
         List<int> possibleMoves = new List<int>();
-
-        // 盤面の状態を取得
         List<List<int>> banmen = state.banmen.GetBanmen();
 
         // 盤内のすべての位置をチェック
@@ -654,77 +727,6 @@ public class GameController : MonoBehaviour {
 
         return (senteReachCount, goteReachCount);
     }
-    /*
-    //AIがリーチの数を計算する関数
-    public (int senteReachCount, int goteReachCount) CountReach(State currentState) {
-        int senteReachCount = 0;
-        int goteReachCount = 0;
-
-        // その状態のsenteArrayとgoteArrayを取得
-        var (senteArray, goteArray) = CreateBinaryArrays(currentState);
-
-        // senteArrayのリーチの数を計算
-        // 縦、横のリーチをチェック
-        for (int i = 0; i < 3; i++) {
-            int[,] horizontalPositions = { { i, 0 }, { i, 1 }, { i, 2 } };
-            int[,] verticalPositions = { { 0, i }, { 1, i }, { 2, i } };
-
-            if (IsReach(senteArray[i, 0], senteArray[i, 1], senteArray[i, 2], currentState, horizontalPositions) ||
-                IsReach(senteArray[0, i], senteArray[1, i], senteArray[2, i], currentState, verticalPositions)) {
-                senteReachCount++;
-            }
-
-            if (IsReach(goteArray[i, 0], goteArray[i, 1], goteArray[i, 2], currentState, horizontalPositions) ||
-                IsReach(goteArray[0, i], goteArray[1, i], goteArray[2, i], currentState, verticalPositions)) {
-                goteReachCount++;
-            }
-        }
-
-        // 斜めのリーチをチェック
-        int[,] diagonalPositions1 = { { 0, 0 }, { 1, 1 }, { 2, 2 } };
-        int[,] diagonalPositions2 = { { 0, 2 }, { 1, 1 }, { 2, 0 } };
-
-        if (IsReach(senteArray[0, 0], senteArray[1, 1], senteArray[2, 2], currentState, diagonalPositions1) ||
-            IsReach(senteArray[0, 2], senteArray[1, 1], senteArray[2, 0], currentState, diagonalPositions2)) {
-            senteReachCount++;
-        }
-
-        if (IsReach(goteArray[0, 0], goteArray[1, 1], goteArray[2, 2], currentState, diagonalPositions1) ||
-            IsReach(goteArray[0, 2], goteArray[1, 1], goteArray[2, 0], currentState, diagonalPositions2)) {
-            goteReachCount++;
-        }
-
-        // 先手と後手のリーチの数を返す
-        return (senteReachCount, goteReachCount);
-    }
-
-    */
-
-
-
-    /*//3つのうち2つが後手の駒（1）で、残り1つが空き（0）または先手の駒（3未満）である場合をリーチとみなします
-    public bool IsReach(int a, int b, int c, State state, int[,] positions) {
-
-        int playerPieceCount = 0;
-        int otherCount = 0;
-
-        // 3つの位置の値を取得
-        int[] values = { a, b, c };
-
-        for (int i = 0; i < 3; i++) {
-            int pos = values[i];
-
-            if (pos == 1) {
-                playerPieceCount++;
-            }
-            else if (pos != 1 && Math.Abs(pos) < 3) {
-                otherCount++;
-            }
-        }
-
-        // リーチの条件を満たすかどうかを判定
-        return playerPieceCount == 2 && otherCount == 1;
-    }*/
 
     public bool IsReach(int player, List<int> positions, State state) {
         List<List<int>> banmen = state.banmen.GetBanmen();
@@ -836,10 +838,8 @@ public class GameController : MonoBehaviour {
         var (currentSenteReachCount, _) = CountReach(currentState);
 
         // 潰せた先手のリーチの数を計算
-        //
         int blockedSenteReaches = parentSenteReachCount - currentSenteReachCount;
 
-        // 潰せた先手のリーチ数を返す
         return blockedSenteReaches;
     }
 
@@ -872,12 +872,6 @@ public class GameController : MonoBehaviour {
         int bestValue = Minimax(root, depth, isMaximizingPlayer);
         Debug.Log("getNext: Minimax completed with bestValue = " + bestValue);
 
-        // opがnullでないことを確認
-        /*if (root.op == null) {
-            Debug.LogError("op is null in getNext after Minimax");
-            return null;
-        }*/
-
         Node bestMove = null;
         int bestEval = int.MinValue; // 最適な評価値を初期化
 
@@ -886,6 +880,7 @@ public class GameController : MonoBehaviour {
             if (child.eval > bestEval) {
                 bestEval = child.eval;
                 bestMove = child;
+                //bestMove.op = child.op;
             }
         }
 
@@ -894,6 +889,9 @@ public class GameController : MonoBehaviour {
         }
         else if (bestMove.op == null) {
             Debug.LogError("getNext: bestMove.op is null");
+        }
+        else {
+            Debug.Log($"getNext: bestMove.op is valid with sourcePos: {bestMove.op.sourcePos}, targetPos: {bestMove.op.targetPos}, koma: {bestMove.op.koma}");
         }
 
         // 最適な手が見つかった場合、そのノードを返す
@@ -928,6 +926,9 @@ public class GameController : MonoBehaviour {
                 int eval = Minimax(childNode, depth - 1, false);
                 // より大きい方をmaxEvalとし、最大評価値を更新
                 maxEval = Math.Max(maxEval, eval);
+                /*if (maxEval == eval) {
+                    node.op = op; // 最適なオペレータを設定
+                }*/
             }
             node.eval = maxEval;
             //Debug.Log("Minimax (maximizing): " + node.eval); // デバッグログを追加
@@ -952,8 +953,12 @@ public class GameController : MonoBehaviour {
                 int eval = Minimax(childNode, depth - 1, true);
                 // より小さい方をminEvalとし、最小評価値を更新
                 minEval = Math.Min(minEval, eval);
+                /*if (minEval == eval) {
+                    node.op = op; // 最適なオペレータを設定
+                }*/
             }
             node.eval = minEval;
+            
             //Debug.Log("Minimax (minimizing): " + node.eval); // デバッグログを追加
             return minEval;
         }
@@ -973,6 +978,7 @@ public class GameController : MonoBehaviour {
 
         if (availablePositions.Count > 0) {
             // 持ち駒から置ける場合
+            //Debug.Log("持ち駒から置くフェーズです。");
             List<Operator> mochigomaOperators = GetMochigomaOperators(state, isMaximizingPlayer);
             foreach (var op in mochigomaOperators) {
                 if (IsValidMove(state, op)) {
@@ -983,6 +989,7 @@ public class GameController : MonoBehaviour {
         }
         else {
             // 盤面から動かす場合
+            //Debug.Log("盤面から動かすフェーズです。");
             List<Operator> boardOperators = GetBoardOperators(state, isMaximizingPlayer);
             foreach (var op in boardOperators) {
                 if (IsValidMove(state, op)) {
@@ -1084,63 +1091,6 @@ public class GameController : MonoBehaviour {
         return evaluation;
     }
 
-    /*public (int senteReachCount, int goteReachCount) CountReachWithDebug(State currentState) {
-        int senteReachCount = 0;
-        int goteReachCount = 0;
-
-        // その状態のsenteArrayとgoteArrayを取得
-        var (senteArray, goteArray) = CreateBinaryArrays(currentState);
-
-        // senteArrayのリーチの数を計算
-        // 縦、横のリーチをチェック
-        for (int i = 0; i < 3; i++) {
-            int[,] horizontalPositions = { { i, 0 }, { i, 1 }, { i, 2 } };
-            int[,] verticalPositions = { { 0, i }, { 1, i }, { 2, i } };
-
-            if (IsReach(senteArray[i, 0], senteArray[i, 1], senteArray[i, 2], currentState, horizontalPositions)) {
-                senteReachCount++;
-                Debug.Log($"Sente reach found at row {i}");
-            }
-            if (IsReach(senteArray[0, i], senteArray[1, i], senteArray[2, i], currentState, verticalPositions)) {
-                senteReachCount++;
-                Debug.Log($"Sente reach found at column {i}");
-            }
-
-            if (IsReach(goteArray[i, 0], goteArray[i, 1], goteArray[i, 2], currentState, horizontalPositions)) {
-                goteReachCount++;
-                Debug.Log($"Gote reach found at row {i}");
-            }
-            if (IsReach(goteArray[0, i], goteArray[1, i], goteArray[2, i], currentState, verticalPositions)) {
-                goteReachCount++;
-                Debug.Log($"Gote reach found at column {i}");
-            }
-        }
-
-        // 斜めのリーチをチェック
-        int[,] diagonalPositions1 = { { 0, 0 }, { 1, 1 }, { 2, 2 } };
-        int[,] diagonalPositions2 = { { 0, 2 }, { 1, 1 }, { 2, 0 } };
-
-        if (IsReach(senteArray[0, 0], senteArray[1, 1], senteArray[2, 2], currentState, diagonalPositions1)) {
-            senteReachCount++;
-            Debug.Log("Sente reach found at diagonal 1");
-        }
-        if (IsReach(senteArray[0, 2], senteArray[1, 1], senteArray[2, 0], currentState, diagonalPositions2)) {
-            senteReachCount++;
-            Debug.Log("Sente reach found at diagonal 2");
-        }
-
-        if (IsReach(goteArray[0, 0], goteArray[1, 1], goteArray[2, 2], currentState, diagonalPositions1)) {
-            goteReachCount++;
-            Debug.Log("Gote reach found at diagonal 1");
-        }
-        if (IsReach(goteArray[0, 2], goteArray[1, 1], goteArray[2, 0], currentState, diagonalPositions2)) {
-            goteReachCount++;
-            Debug.Log("Gote reach found at diagonal 2");
-        }
-
-        // 先手と後手のリーチの数を返す
-        return (senteReachCount, goteReachCount);
-    }*/
 
     public (int senteReachCount, int goteReachCount) CountReachWithDebug(State currentState) {
         int senteReachCount = 0;
