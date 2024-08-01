@@ -18,6 +18,8 @@ public class GameController : MonoBehaviour {
     public LayerMask positionLayer;  // Position用のレイヤーマスク
     private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
     public GameObject[] goteKomas; // 駒を格納する配列
+    //勝利判定表示用のテキスト
+    public Text resultText;
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -150,7 +152,8 @@ public class GameController : MonoBehaviour {
                         //勝利判定
                         GameResult postMoveResult = CheckWinner(state);
                         if (postMoveResult != GameResult.None) {
-                            Debug.Log($"勝利判定の結果: {postMoveResult}");
+                            Debug.Log($"勝利判定の結果: {postMoveResult}");//テキストで出したい
+                            resultText.text = postMoveResult.ToString();
                             return; //終了
                         }
                     }
@@ -281,7 +284,8 @@ public class GameController : MonoBehaviour {
         //勝利判定
         if (CheckWinner(state) != GameResult.None) {
             isGameOver = true;
-            Debug.Log("勝利判定: " + CheckWinner(state));
+            Debug.Log("勝利判定: " + CheckWinner(state));//テキストで出したい
+            resultText.text = CheckWinner(state).ToString();
             //その時の盤面をログに出力
             PrintCurrentBanmen(newState);/////
         }
@@ -947,6 +951,10 @@ public class GameController : MonoBehaviour {
                 /*if (maxEval == eval) {
                     node.op = op; // 最適なオペレータを設定
                 }*/
+                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
+                if (CheckWinner(childState) == GameResult.SenteWin) {
+                    return maxEval;
+                }
             }
             node.eval = maxEval;
             //Debug.Log("Minimax (maximizing): " + node.eval); // デバッグログを追加
@@ -974,6 +982,10 @@ public class GameController : MonoBehaviour {
                 /*if (minEval == eval) {
                     node.op = op; // 最適なオペレータを設定
                 }*/
+                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
+                if (CheckWinner(childState) == GameResult.GoteWin) {
+                    return minEval;
+                }
             }
             node.eval = minEval;
             
