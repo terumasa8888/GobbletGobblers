@@ -8,7 +8,7 @@ using UnityEngine.UI;
 
 public class GameController : MonoBehaviour {
 
-    bool isGameOver = false;// ゲームが終了したかどうかを表すbool型の変数
+    bool isGameOver;// ゲームが終了したかどうかを表すbool型の変数
     State state;
     Operator op;
     int[] lastElementsArray; //盤面の各マスの最後の要素を格納する配列
@@ -18,8 +18,7 @@ public class GameController : MonoBehaviour {
     public LayerMask positionLayer;  // Position用のレイヤーマスク
     private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
     public GameObject[] goteKomas; // 駒を格納する配列
-    //勝利判定表示用のテキスト
-    public Text resultText;
+    public Text resultText;//勝利判定表示用のテキスト
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -30,7 +29,6 @@ public class GameController : MonoBehaviour {
 
     void Start() {
         isGameOver = false;
-        //Stateクラスのインスタンスを生成
         state = new State(new Banmen(), new Mochigoma(3, 3, 2, 2, 1, 1), new Mochigoma(-3, -3, -2, -2, -1, -1));
         lastElementsArray = new int[9];
 
@@ -75,31 +73,33 @@ public class GameController : MonoBehaviour {
     }
 
     void HandleAITurn() {
-        // AIのターン処理
-        //Debug.Log("AIが駒を置こうとしています");
+        var stopwatch = new System.Diagnostics.Stopwatch();
+        stopwatch.Start();
+
         GetAvailablePositonsList(state);
-        //State newState = getNext(state, 2);
         Node newNode = getNext(state, 3);
 
         if (newNode != null && newNode.op != null) {
-            Debug.Log($"HandleAITurn: bestMove.op - sourcePos: {newNode.op.sourcePos}, targetPos: {newNode.op.targetPos}, koma: {newNode.op.koma}");
             MoveAIPiece(newNode);
         }
         else {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
         }
 
-        EvaluateStateWithDebug(newNode);//デバッグ用
-        //得られたノードの評価値をログに出力
+        //EvaluateStateWithDebug(newNode);//デバッグ用
         Debug.Log("評価値: " + newNode.eval);
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
+        PrintCurrentBanmen(state);
 
-        //駒オブジェクトを移動させる処理を追加
-        //MoveAIPiece(newNode.op);//ここで適切にopが設定されていない？？
-
-        //Debug.Log("AIが駒を置きました");
-        //PrintCurrentBanmen(state);
+        stopwatch.Stop();
+        Debug.Log($"HandleAITurn 実行時間: {stopwatch.ElapsedMilliseconds} ms");
+        //勝利判定
+        GameResult postMoveResult = CheckWinner(state);
+        if (postMoveResult != GameResult.None) {
+            Debug.Log($"勝利判定: {postMoveResult}");
+            resultText.text = postMoveResult.ToString();
+        }
     }
 
     // ドラッグ開始時に駒を選択する関数
@@ -125,6 +125,8 @@ public class GameController : MonoBehaviour {
                 komaSize = selectedKoma.GetComponent<Koma>().size;
                 komaPos = selectedKoma.GetComponent<Koma>().pos;
 
+                //置けるところリストの更新
+                availablePositionsList = GetAvailablePositonsList(state);
                 // 持ち駒から置ける場所があるかどうかを判定
                 bool canPlaceFromMochigoma = availablePositionsList.Count > 0;
 
@@ -152,9 +154,10 @@ public class GameController : MonoBehaviour {
                         //勝利判定
                         GameResult postMoveResult = CheckWinner(state);
                         if (postMoveResult != GameResult.None) {
-                            Debug.Log($"勝利判定の結果: {postMoveResult}");//テキストで出したい
+                            Debug.Log($"勝利判定: {postMoveResult}");
                             resultText.text = postMoveResult.ToString();
-                            return; //終了
+                            PrintCurrentBanmen(state);
+                            return;
                         }
                     }
                 }
@@ -170,21 +173,19 @@ public class GameController : MonoBehaviour {
     void FollowCursor() {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
-        // マウスカーソルの位置に駒を追従させるために、カメラからの固定距離を保つ
+
         Vector3 mousePosition = Input.mousePosition;
         // カメラからの固定距離をスクリーン座標でのZ値として設定
         mousePosition.z = 10.0f;
         Vector3 newPosition = Camera.main.ScreenToWorldPoint(mousePosition);
 
-        // CapsuleColliderを取得し、駒の高さを取得する
         CapsuleCollider komaCapsuleCollider = selectedKoma.GetComponent<CapsuleCollider>();
         if (komaCapsuleCollider != null) {
             float komaHeight = komaCapsuleCollider.height;
-            // CapsuleColliderの中心から底部までの距離を考慮して位置を調整
             newPosition.y += komaHeight * selectedKoma.transform.localScale.y / 2.0f;
         }
         else {
-            newPosition.y += 0.5f; // CapsuleColliderがない場合はデフォルトのオフセットを使用
+            newPosition.y += 0.5f;
         }
         selectedKoma.transform.position = newPosition;
     }
@@ -195,29 +196,25 @@ public class GameController : MonoBehaviour {
         RaycastHit hit;
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.blue, 5.0f);
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
-            //駒を置いて反映
             GetAvailablePositonsList(state);
             PlaceSelectedKomaOnPosition(hit);
             UpdateMochigoma(state, op);
-            //state.NextTurn();
             Debug.Log("ターン数: " + state.turn);
         }
         selectedKoma = null;
     }
 
-    //駒を置く関数
+    //駒を置く具体的な処理を行う関数
     void PlaceSelectedKomaOnPosition(RaycastHit hit) {
 
         int komaSize = selectedKoma.GetComponent<Koma>().size;
         int komaPos = selectedKoma.GetComponent<Koma>().pos;
         int positionNumber = hit.collider.gameObject.GetComponent<Position>().number;
 
-        // 現在のターンに基づいて、先手または後手のプレイヤーの持ち駒を操作するための変数を定義
         Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
 
         //移動前と後が同じ位置なら、駒を元の位置に戻し、移動処理は行わない
         if (positionNumber == komaPos && komaPos != -1) {
-            // 駒を元の位置に戻す処理
             ResetKomaPosition();
             Debug.Log("現在と同じ位置に駒を置くことはできません");
             currentPlayerMochigoma.RemoveKoma(komaSize);
@@ -229,7 +226,7 @@ public class GameController : MonoBehaviour {
                     banmen[komaPos][banmen[komaPos].Count - 1] = komaSize;
                 }
                 else {
-                    banmen[komaPos].Add(komaSize); // リストが空の場合、新しい要素を追加
+                    banmen[komaPos].Add(komaSize);
                 }
             }
             else {
@@ -273,8 +270,6 @@ public class GameController : MonoBehaviour {
 
         selectedKoma = null;
 
-        //positionNumberをログに出力
-        //Debug.Log($"positionNumber: {positionNumber}");
         //現在位置、移動先、駒のサイズを引数にOperatorクラスのインスタンスを生成
         op = new Operator(availablePositionsList, komaPos, positionNumber, komaSize);
 
@@ -282,12 +277,11 @@ public class GameController : MonoBehaviour {
         ApplyMove(newState);
 
         //勝利判定
-        if (CheckWinner(state) != GameResult.None) {
-            isGameOver = true;
-            Debug.Log("勝利判定: " + CheckWinner(state));//テキストで出したい
-            resultText.text = CheckWinner(state).ToString();
-            //その時の盤面をログに出力
-            PrintCurrentBanmen(newState);/////
+        GameResult preMoveResult = CheckWinner(state);
+        if (preMoveResult != GameResult.None) {
+            Debug.Log($"勝利判定: {preMoveResult}");
+            resultText.text = preMoveResult.ToString();
+            PrintCurrentBanmen(newState);
         }
     }
 
@@ -296,10 +290,7 @@ public class GameController : MonoBehaviour {
         int sourceNumber = newNode.op.sourcePos;
         int positionNumber = newNode.op.targetPos;
 
-        List<List<int>> banmen = newNode.state.banmen.GetBanmen();///////////////
-
-        // デバッグ用ログ
-        Debug.Log($"MoveAIPiece called with komaSize: {komaSize}, sourceNumber: {sourceNumber}, positionNumber: {positionNumber}");
+        List<List<int>> banmen = newNode.state.banmen.GetBanmen();
 
         // 位置の範囲チェック
         if (positionNumber < 0 || positionNumber >= 9) {
@@ -308,7 +299,7 @@ public class GameController : MonoBehaviour {
         }
 
         // 駒を取得
-        GameObject koma = FindKoma(komaSize, sourceNumber);//komaSizeがなぜかいつも-3
+        GameObject koma = FindKoma(komaSize, sourceNumber);
         if (koma == null) {
             Debug.LogError("Koma not found.");
             return;
@@ -345,14 +336,11 @@ public class GameController : MonoBehaviour {
 
         komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
 
-        lastElementsArray[positionNumber] = komaSize;//////
+        lastElementsArray[positionNumber] = komaSize;
         GetAvailablePositonsList(state);
-        //Debug.Log("Updated lastElementsArray[" + positionNumber + "]: " + lastElementsArray[positionNumber]);
-
 
         // stateの盤面情報を更新
-
-        banmen[positionNumber].Add(komaSize);//ここはいけてる
+        banmen[positionNumber].Add(komaSize);
         newNode.state.banmen.SetBanmen(banmen);
 
     }
@@ -398,7 +386,7 @@ public class GameController : MonoBehaviour {
         foreach (GameObject komaObject in goteKomas) {
             Koma koma = komaObject.GetComponent<Koma>();
             //koma.posとsourcePos、koma.sizeとsizeを全てログに出力
-            Debug.Log($"koma.pos: {koma.pos}, sourcePos: {sourcePos}, koma.size: {koma.size}, size: {size}");
+            //Debug.Log($"koma.pos: {koma.pos}, sourcePos: {sourcePos}, koma.size: {koma.size}, size: {size}");
             if (koma != null && koma.pos == sourcePos && koma.size == size && koma.player == -1) {
                 return komaObject;
             }
@@ -460,7 +448,7 @@ public class GameController : MonoBehaviour {
         // オペレータに基づいて駒を置く処理を行う      
         List<List<int>> banmen = newState.banmen.GetBanmen();
 
-        // 駒を移動元から削除する処理を追加
+        // 盤面上の移動の際、駒を移動元から削除する処理を追加
         if (op.sourcePos >= 0 && op.sourcePos < banmen.Count) {
             if (banmen[op.sourcePos].Count > 0) {
                 banmen[op.sourcePos].RemoveAt(banmen[op.sourcePos].Count - 1);
@@ -469,9 +457,9 @@ public class GameController : MonoBehaviour {
                 Debug.LogWarning("No pieces to remove at source position: " + op.sourcePos);
             }
         }
-        else {
+        /*else {
             Debug.LogWarning("Source position is out of range: " + op.sourcePos);
-        }
+        }*/
         // 駒を置く処理
         banmen[op.targetPos].Add(op.koma);
 
@@ -627,7 +615,7 @@ public class GameController : MonoBehaviour {
 
         List<Operator> operators = new List<Operator>();
         List<List<int>> banmen = state.banmen.GetBanmen();
-        int player = isMaximizingPlayer ? -1 : 1;//ここが逆だった！！！！！！
+        int player = isMaximizingPlayer ? -1 : 1;//ここが逆だった
 
         // lastElementsArrayを更新
         int[] lastElementsArray = new int[banmen.Count];
@@ -674,7 +662,6 @@ public class GameController : MonoBehaviour {
 
     // オペレータが有効かどうかをチェックするメソッド
     public bool IsValidMove(State state, Operator op) {
-        // nullチェックを追加
         if (state == null) {
             Debug.LogError("State is null");
             return false;
@@ -816,8 +803,10 @@ public class GameController : MonoBehaviour {
             Debug.LogError("op is null");
             return false;
         }
+
         //currentStateの盤面の状態を一時変数に格納
         List<List<int>> banmen = currentState.banmen.GetBanmen();
+
         // banmenがnullでないことを確認
         if (banmen == null) {
             Debug.LogError("banmen is null");
@@ -844,7 +833,6 @@ public class GameController : MonoBehaviour {
     }
 
     //AIがその手がプレイヤーのリーチを潰した数を計算する関数
-    //ここちょっと無駄が多い
     public int CountBlockedReaches(State parentState, State currentState) {
         // parentStateの先手のリーチ数をカウント
         var (parentSenteReachCount, _) = CountReach(parentState);
@@ -879,18 +867,14 @@ public class GameController : MonoBehaviour {
 
 
     Node getNext(State state, int depth) {
-        // ルートノードを現在の状態で初期化
+
         Node root = new Node(state, null, null);
         // 偶数ターンはAIプレイヤー
         bool isMaximizingPlayer = state.turn % 2 == 0;
-        // ミニマックスアルゴリズムを使用して最適な手を探索
         int bestValue = Minimax(root, depth, isMaximizingPlayer);
-        Debug.Log("getNext: Minimax completed with bestValue = " + bestValue);
 
         Node bestMove = null;
-        int bestEval = int.MinValue; // 最適な評価値を初期化
 
-        // 子ノードをすべて調べて最適な手を見つける
         /*foreach (Node child in root.children) {
             if (child.eval > bestEval) {
                 bestEval = child.eval;
@@ -898,6 +882,8 @@ public class GameController : MonoBehaviour {
                 //bestMove.op = child.op;
             }
         }*/
+
+        // 子ノードをすべて調べて最適な手を見つける
         foreach (Node child in root.children) {
             if (child.eval == bestValue) {
                 bestMove = child;
@@ -912,9 +898,6 @@ public class GameController : MonoBehaviour {
         else if (bestMove.op == null) {
             Debug.LogError("getNext: bestMove.op is null");
         }
-        else {
-            Debug.Log($"getNext: bestMove.op is valid with sourcePos: {bestMove.op.sourcePos}, targetPos: {bestMove.op.targetPos}, koma: {bestMove.op.koma}");
-        }
 
         // 最適な手が見つかった場合、そのノードを返す
         return bestMove != null ? bestMove : root;
@@ -924,7 +907,6 @@ public class GameController : MonoBehaviour {
         // 探索の深さが0またはゲームが終了している場合、評価値を返す
         if (depth == 0 || IsGameOver(node.state)) {
             node.eval = EvaluateState(node); // そのノードの評価値を評価関数から計算
-            //Debug.Log("Minimax (depth 0 or game over): " + node.eval); // デバッグログを追加
             return node.eval;
         }
 
@@ -932,7 +914,6 @@ public class GameController : MonoBehaviour {
         if (isMaximizingPlayer) {
             int maxEval = int.MinValue;
             var possibleMoves = GetPossibleMoves(node.state, isMaximizingPlayer);
-            //Debug.Log("Possible moves (maximizing): " + possibleMoves.Count); // デバッグログを追加
 
             // すべての可能な次の状態を生成
             foreach ((State childState, Operator op) in possibleMoves) {
@@ -940,56 +921,48 @@ public class GameController : MonoBehaviour {
                     Debug.LogError("op is null in Minimax for maximizing player");
                     continue;
                 }
-                // 子ノードを生成し、親ノードのstateとオペレータを渡す
                 Node childNode = new Node(childState, node.state, op);
-                // 親ノードのchildrenリストに子ノードを追加
                 node.children.Add(childNode);
+
+                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
+                if (CheckWinner(childState) == GameResult.GoteWin) {
+                    //Debug.Log("勝利条件を満たす手が見つかりました:size: " + op.koma + "sourcePos: " + op.sourcePos + "targetPos: " + op.targetPos);
+                    node.eval = EvaluateState(childNode); // 子ノードの評価値を計算
+                    return node.eval;
+                }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
                 int eval = Minimax(childNode, depth - 1, false);
-                // より大きい方をmaxEvalとし、最大評価値を更新
                 maxEval = Math.Max(maxEval, eval);
-                /*if (maxEval == eval) {
-                    node.op = op; // 最適なオペレータを設定
-                }*/
-                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
-                if (CheckWinner(childState) == GameResult.SenteWin) {
-                    return maxEval;
-                }
+                
             }
             node.eval = maxEval;
-            //Debug.Log("Minimax (maximizing): " + node.eval); // デバッグログを追加
             return maxEval;
         }
         // 得点最小化プレイヤーの場合
         else {
             int minEval = int.MaxValue;
             var possibleMoves = GetPossibleMoves(node.state, isMaximizingPlayer);
-            //Debug.Log("Possible moves (minimizing): " + possibleMoves.Count); // デバッグログを追加
 
             foreach ((State childState, Operator op) in possibleMoves) {
                 if (op == null) {
                     Debug.LogError("op is null in Minimax for minimizing player");
                     continue;
                 }
-                // 子ノードを生成し、親ノードのstateとオペレータを渡す
                 Node childNode = new Node(childState, node.state, op);
-                // 親ノードのchildrenリストに子ノードを追加
                 node.children.Add(childNode);
+
+                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
+                /*if (CheckWinner(childState) == GameResult.SenteWin) {
+                    Debug.Log("勝利条件を満たす手が見つかりました:size: " + op.koma + "sourcePos: " + op.sourcePos + "targetPos: " + op.targetPos);
+                    node.eval = EvaluateState(childNode); // 子ノードの評価値を計算
+                    return node.eval;
+                }*/
                 // 再帰的にMinimaxを呼び出し、評価値を計算
                 int eval = Minimax(childNode, depth - 1, true);
-                // より小さい方をminEvalとし、最小評価値を更新
                 minEval = Math.Min(minEval, eval);
-                /*if (minEval == eval) {
-                    node.op = op; // 最適なオペレータを設定
-                }*/
-                // 勝利条件を満たす手が見つかった場合、その手を即座に返す
-                if (CheckWinner(childState) == GameResult.GoteWin) {
-                    return minEval;
-                }
+                
             }
             node.eval = minEval;
-            
-            //Debug.Log("Minimax (minimizing): " + node.eval); // デバッグログを追加
             return minEval;
         }
     }
@@ -1008,7 +981,6 @@ public class GameController : MonoBehaviour {
 
         if (availablePositions.Count > 0) {
             // 持ち駒から置ける場合
-            //Debug.Log("持ち駒から置くフェーズです。");
             List<Operator> mochigomaOperators = GetMochigomaOperators(state, isMaximizingPlayer);
             foreach (var op in mochigomaOperators) {
                 if (IsValidMove(state, op)) {
@@ -1019,7 +991,6 @@ public class GameController : MonoBehaviour {
         }
         else {
             // 盤面から動かす場合
-            //Debug.Log("盤面から動かすフェーズです。");
             List<Operator> boardOperators = GetBoardOperators(state, isMaximizingPlayer);
             foreach (var op in boardOperators) {
                 if (IsValidMove(state, op)) {
@@ -1028,8 +999,6 @@ public class GameController : MonoBehaviour {
                 }
             }
         }
-
-        //Debug.Log("GetPossibleMoves: possibleMoves count = " + possibleMoves.Count);
         return possibleMoves;
     }
 
@@ -1066,8 +1035,7 @@ public class GameController : MonoBehaviour {
         evaluation += positionScore;
 
         // 最終評価値を返す
-        //Debug.Log("Final Evaluation: " + evaluation);
-        node.eval = evaluation; // ここを追加
+        node.eval = evaluation;
         return evaluation;
     }
 
