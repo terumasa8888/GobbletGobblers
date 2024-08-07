@@ -16,9 +16,9 @@ public class GameController : MonoBehaviour {
     private GameObject selectedKoma;//Unityで選択された駒を格納するための変数
     public LayerMask komaLayer; // Koma用のレイヤーマスク
     public LayerMask positionLayer;  // Position用のレイヤーマスク
-    private Vector3 originalPosition; // 選択された駒の移動前の位置情報を保持する変数
-    public GameObject[] goteKomas; // 駒を格納する配列
-    public Text resultText;//勝利判定表示用のテキスト
+    private Vector3 originalPosition;
+    public GameObject[] goteKomas;
+    public Text resultText;
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -62,14 +62,6 @@ public class GameController : MonoBehaviour {
             // 後手のターン（偶数ターン）
             HandleAITurn();
         }
-
-        // 勝利判定
-        /*if (CheckWinner(state) != GameResult.None) {
-            isGameOver = true;
-            Debug.Log("勝利判定: " + CheckWinner(state));
-            //その時の盤面をログに出力
-            PrintCurrentBanmen(state);
-        }*/
     }
 
     void HandleAITurn() {
@@ -99,6 +91,8 @@ public class GameController : MonoBehaviour {
         if (postMoveResult != GameResult.None) {
             Debug.Log($"勝利判定: {postMoveResult}");
             resultText.text = postMoveResult.ToString();
+            PrintCurrentBanmen(state);
+            isGameOver = true;
         }
     }
 
@@ -157,7 +151,7 @@ public class GameController : MonoBehaviour {
                             Debug.Log($"勝利判定: {postMoveResult}");
                             resultText.text = postMoveResult.ToString();
                             PrintCurrentBanmen(state);
-                            return;
+                            isGameOver = true;
                         }
                     }
                 }
@@ -282,6 +276,7 @@ public class GameController : MonoBehaviour {
             Debug.Log($"勝利判定: {preMoveResult}");
             resultText.text = preMoveResult.ToString();
             PrintCurrentBanmen(newState);
+            isGameOver = true;
         }
     }
 
@@ -381,7 +376,7 @@ public class GameController : MonoBehaviour {
         GetAvailablePositonsList(state);
     }
 
-        GameObject FindKoma(int size, int sourcePos) {
+    GameObject FindKoma(int size, int sourcePos) {
         // goteKomas 配列内のすべての GameObject をチェック
         foreach (GameObject komaObject in goteKomas) {
             Koma koma = komaObject.GetComponent<Koma>();
@@ -487,12 +482,11 @@ public class GameController : MonoBehaviour {
         }
 
         // 現在の盤面の状態をログに出力
-        PrintCurrentBanmen(newState);/////
+        PrintCurrentBanmen(newState);
         //ここでlastElementsArrayもログに出力
         Debug.Log("lastElementsArray: " + string.Join(", ", lastElementsArray));
     }
 
-    //なんか後手の持ち駒-3が3つあるから初期化か置くときの更新がおかしい
     private void UpdateMochigoma(State state, Operator op) {
         if (op.koma > 0) {
             state.sente.RemoveKoma(op.koma);
@@ -510,32 +504,12 @@ public class GameController : MonoBehaviour {
     public GameResult CheckWinner(State state) {
         var (senteArray, goteArray) = CreateBinaryArrays(state);
 
-        // 勝利条件のチェック
         if (HasWinningLine(senteArray)) {
-            string banmenOutput = "";
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    banmenOutput += senteArray[row, col].ToString() + " ";
-                }
-                banmenOutput += "\n";
-            }
-            //探索の際のリーチ潰し判定にも使うので、いったんコメントアウト
-            //Debug.Log($"先手の勝利盤面:\n{banmenOutput}");
             return GameResult.SenteWin;
         }
         else if (HasWinningLine(goteArray)) {
-            string banmenOutput = "";
-            for (int row = 0; row < 3; row++) {
-                for (int col = 0; col < 3; col++) {
-                    banmenOutput += goteArray[row, col].ToString() + " ";
-                }
-                banmenOutput += "\n";
-            }
-            //探索の際のリーチ潰し判定にも使うので、いったんコメントアウト
-            //Debug.Log($"後手の勝利盤面:\n{banmenOutput}");
             return GameResult.GoteWin;
         }
-
         return GameResult.None;
     }
 
@@ -702,6 +676,7 @@ public class GameController : MonoBehaviour {
         }*/
     }
 
+    //両プレイヤーのリーチの数をカウントする関数
     public (int senteReachCount, int goteReachCount) CountReach(State currentState) {
         int senteReachCount = 0;
         int goteReachCount = 0;
@@ -730,6 +705,7 @@ public class GameController : MonoBehaviour {
         return (senteReachCount, goteReachCount);
     }
 
+    //ある一列がリーチかどうかを判定する関数
     public bool IsReach(int player, List<int> positions, State state) {
         List<List<int>> banmen = state.banmen.GetBanmen();
         int[] lastElementsArray = new int[banmen.Count];
@@ -766,7 +742,7 @@ public class GameController : MonoBehaviour {
     }
 
 
-
+    //勝利判定のために、1を自分の駒とした二次元配列を返す関数
     private (int[,], int[,]) CreateBinaryArrays(State state) {
         int[,] senteArray = new int[3, 3];
         int[,] goteArray = new int[3, 3];
@@ -875,19 +851,10 @@ public class GameController : MonoBehaviour {
 
         Node bestMove = null;
 
-        /*foreach (Node child in root.children) {
-            if (child.eval > bestEval) {
-                bestEval = child.eval;
-                bestMove = child;
-                //bestMove.op = child.op;
-            }
-        }*/
-
         // 子ノードをすべて調べて最適な手を見つける
         foreach (Node child in root.children) {
             if (child.eval == bestValue) {
                 bestMove = child;
-                //bestMove.op = child.op;
                 break;
             }
         }
@@ -926,8 +893,7 @@ public class GameController : MonoBehaviour {
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
                 if (CheckWinner(childState) == GameResult.GoteWin) {
-                    //Debug.Log("勝利条件を満たす手が見つかりました:size: " + op.koma + "sourcePos: " + op.sourcePos + "targetPos: " + op.targetPos);
-                    node.eval = EvaluateState(childNode); // 子ノードの評価値を計算
+                    node.eval = EvaluateState(childNode);
                     return node.eval;
                 }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
@@ -952,11 +918,10 @@ public class GameController : MonoBehaviour {
                 node.children.Add(childNode);
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
-                /*if (CheckWinner(childState) == GameResult.SenteWin) {
-                    Debug.Log("勝利条件を満たす手が見つかりました:size: " + op.koma + "sourcePos: " + op.sourcePos + "targetPos: " + op.targetPos);
-                    node.eval = EvaluateState(childNode); // 子ノードの評価値を計算
+                if (CheckWinner(childState) == GameResult.SenteWin) {
+                    node.eval = EvaluateState(childNode);
                     return node.eval;
-                }*/
+                }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
                 int eval = Minimax(childNode, depth - 1, true);
                 minEval = Math.Min(minEval, eval);
