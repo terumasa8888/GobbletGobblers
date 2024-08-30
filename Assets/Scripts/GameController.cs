@@ -104,61 +104,59 @@ public class GameController : MonoBehaviour {
 
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
             selectedKoma = hit.collider.gameObject;
-            // 選択された駒の現在の位置を保存
+
             originalPosition = selectedKoma.transform.position;
             Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
 
             int currentPlayer = state.turn % 2 == 1 ? 1 : -1;
-            // 現在のターンに基づいて、先手または後手のプレイヤーの持ち駒を操作するための変数を定義
+
             Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
             int komaSize = 0;
             int komaPos = -1;
 
-            if (selectedKomaComponent.player == currentPlayer) {
-                // 駒のサイズ情報と位置情報を取得
-                komaSize = selectedKoma.GetComponent<Koma>().size;
-                komaPos = selectedKoma.GetComponent<Koma>().pos;
-
-                //置けるところリストの更新
-                availablePositionsList = GetAvailablePositonsList(state);
-                // 持ち駒から置ける場所があるかどうかを判定
-                bool canPlaceFromMochigoma = availablePositionsList.Count > 0;
-
-                // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
-                if (komaPos != -1 && canPlaceFromMochigoma) {
-                    Debug.Log("持ち駒から置ける場所があるため、盤面の駒は選択できません");
-                    selectedKoma = null;
-                }
-                // 選択した駒が持ち駒で、持ち駒から置ける場所がない場合
-                else if (komaPos == -1 && !canPlaceFromMochigoma) {
-                    Debug.Log("持ち駒から置ける場所がないため、持ち駒は選択できません");
-                    selectedKoma = null;
-                }
-                //選んだ駒が動かせる場合
-                else {
-                    //選択した駒が盤面の駒の時
-                    if (komaPos != -1) {
-                        Debug.Log("選択した駒を持ち駒に追加します");
-                        //その時の手番のプレイヤーの持ち駒リストに加える
-                        currentPlayerMochigoma.AddKoma(komaSize);
-                        //移動元の位置のリストから最後尾の駒を削除
-                        List<List<int>> banmen = state.banmen.GetBanmen();
-                        banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
-
-                        //勝利判定
-                        GameResult postMoveResult = CheckWinner(state);
-                        if (postMoveResult != GameResult.None) {
-                            Debug.Log($"勝利判定: {postMoveResult}");
-                            resultText.text = postMoveResult.ToString();
-                            PrintCurrentBanmen(state);
-                            isGameOver = true;
-                        }
-                    }
-                }
-            }
-            else {
+            if (selectedKomaComponent.player != currentPlayer) {
                 Debug.Log("この駒は現在のプレイヤーのものではありません");
                 selectedKoma = null;
+            }
+  
+            komaSize = selectedKoma.GetComponent<Koma>().size;
+            komaPos = selectedKoma.GetComponent<Koma>().pos;
+
+            availablePositionsList = GetAvailablePositonsList(state);
+            bool canPlaceFromMochigoma = availablePositionsList.Count > 0;
+
+            // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
+            if (komaPos != -1 && canPlaceFromMochigoma) {
+                Debug.Log("持ち駒から置ける場所があるため、盤面の駒は選択できません");
+                selectedKoma = null;
+                return;
+            }
+            // 選択した駒が持ち駒で、持ち駒から置ける場所がない場合
+            else if (komaPos == -1 && !canPlaceFromMochigoma) {
+                Debug.Log("持ち駒から置ける場所がないため、持ち駒は選択できません");
+                selectedKoma = null;
+                return;
+            }
+            // 選択した駒が持ち駒で、持ち駒から置ける場所がある場合
+            else if(komaPos == -1 && canPlaceFromMochigoma) {
+                return;
+            }
+
+            // 選択した駒が盤面にあり、持ち駒から置ける場所がない場合
+            Debug.Log("選択した駒を持ち駒に追加します");
+            //その時の手番のプレイヤーの持ち駒リストに加える
+            currentPlayerMochigoma.AddKoma(komaSize);
+            //移動元の位置のリストから最後尾の駒を削除
+            List<List<int>> banmen = state.banmen.GetBanmen();
+            banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
+
+            //勝利判定
+            GameResult postMoveResult = CheckWinner(state);
+            if (postMoveResult != GameResult.None) {
+                Debug.Log($"勝利判定: {postMoveResult}");
+                resultText.text = postMoveResult.ToString();
+                PrintCurrentBanmen(state);
+                isGameOver = true;
             }
         }
     }
