@@ -63,9 +63,6 @@ public class GameController : MonoBehaviour {
     }
 
     void HandleAITurn() {
-        var stopwatch = new System.Diagnostics.Stopwatch();
-        stopwatch.Start();
-
         GetAvailablePositonsList(state);
         Node newNode = getNext(state, 3);
 
@@ -81,8 +78,6 @@ public class GameController : MonoBehaviour {
         UpdateMochigoma(state, newNode.op);
         PrintCurrentBanmen(state);
 
-        stopwatch.Stop();
-        Debug.Log($"HandleAITurn 実行時間: {stopwatch.ElapsedMilliseconds} ms");
         //勝利判定
         GameResult postMoveResult = CheckWinner(state);
         if (postMoveResult != GameResult.None) {
@@ -817,7 +812,7 @@ public class GameController : MonoBehaviour {
     int Minimax(Node node, int depth, bool isMaximizingPlayer) {
         // 探索の深さが0またはゲームが終了している場合、評価値を返す
         if (depth == 0 || IsGameOver(node.state)) {
-            node.eval = EvaluateState(node); // そのノードの評価値を評価関数から計算
+            node.eval = Evaluate(node); // そのノードの評価値を評価関数から計算
             return node.eval;
         }
 
@@ -837,7 +832,7 @@ public class GameController : MonoBehaviour {
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
                 if (CheckWinner(childState) == GameResult.GoteWin) {
-                    node.eval = EvaluateState(childNode);
+                    node.eval = Evaluate(childNode);
                     return node.eval;
                 }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
@@ -863,7 +858,7 @@ public class GameController : MonoBehaviour {
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
                 if (CheckWinner(childState) == GameResult.SenteWin) {
-                    node.eval = EvaluateState(childNode);
+                    node.eval = Evaluate(childNode);
                     return node.eval;
                 }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
@@ -912,38 +907,30 @@ public class GameController : MonoBehaviour {
     }
 
     // 評価関数
-    int EvaluateState(Node node) {
-        State currentState = node.state; // 現在の状態を取得
-        State parentState = node.parentState; // 親ノードの状態を取得
+    int Evaluate(Node node) {
+        State currentState = node.state;
+        State parentState = node.parentState;
         int evaluation = 0;
 
         GameResult result = CheckWinner(currentState);
-        // 後手のビンゴラインが揃っている場合は1000点を加算
         if (result == GameResult.GoteWin) {
             evaluation += 1000;
         }
-        // 先手のビンゴラインが揃っている場合は-10000点を加算
         if (result == GameResult.SenteWin) {
             evaluation -= 10000;
         }
-        // op.komaが相手の上に被せている場合、+150点
         if (CheckCoveringMove(currentState, node.op)) {
             evaluation += 150;
         }
-
-        // 潰せたプレイヤーのリーチの数をカウント
         int blockedReaches = CountBlockedReaches(parentState, currentState);
         evaluation += blockedReaches * 150;
 
-        // currentStateにおける敵AIのリーチ数×25点evaluationに加算
         int goteReachCount = CountReach(currentState).goteReachCount;
         evaluation += goteReachCount * 25;
 
-        // 置いたマス目ごとに点数を付ける
         int positionScore = GetPositionScore(node.op.targetPos);
         evaluation += positionScore;
 
-        // 最終評価値を返す
         node.eval = evaluation;
         return evaluation;
     }
