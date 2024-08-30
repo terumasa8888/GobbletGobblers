@@ -8,12 +8,12 @@ using UnityEngine.UI;
 
 public class GameController : MonoBehaviour {
 
-    bool isGameOver;// ゲームが終了したかどうかを表すbool型の変数
+    bool isGameOver;
     State state;
     Operator op;
     int[] lastElementsArray; //盤面の各マスの最後の要素を格納する配列
-    List<int> availablePositionsList; // 駒を置ける場所のリスト
     private GameObject selectedKoma;//Unityで選択された駒を格納するための変数
+
     public LayerMask komaLayer; // Koma用のレイヤーマスク
     public LayerMask positionLayer;  // Position用のレイヤーマスク
     private Vector3 originalPosition;
@@ -22,18 +22,17 @@ public class GameController : MonoBehaviour {
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
-        None,      // 誰も勝っていない
-        SenteWin,  // 先手の勝ち
-        GoteWin  // 後手の勝ち
+        None,
+        SenteWin,
+        GoteWin
     }
 
     void Start() {
         isGameOver = false;
         state = new State(new Banmen(), new Mochigoma(3, 3, 2, 2, 1, 1), new Mochigoma(-3, -3, -2, -2, -1, -1));
         lastElementsArray = new int[9];
+        GetAvailablePositonsList(state);
 
-        availablePositionsList = GetAvailablePositonsList(state);
-        // goteKomas 配列の初期化確認
         if (goteKomas == null || goteKomas.Length == 0) {
             Debug.LogError("goteKomas array is not initialized or empty.");
         }
@@ -46,20 +45,16 @@ public class GameController : MonoBehaviour {
         if (isGameOver) return;
 
         if (state.turn % 2 == 1) {
-            // ドラッグ開始
             if (Input.GetMouseButtonDown(0)) {
                 HandlePieceSelection();
             }
-            // ドラッグ中に駒をマウスに追従させる
             if (Input.GetMouseButton(0) && selectedKoma != null) {
                 FollowCursor();
             }
-            // ドロップ（マウスを離した時）
             if (Input.GetMouseButtonUp(0) && selectedKoma != null) {
                 HandlePieceDrop();
             }
         } else {
-            // 後手のターン（偶数ターン）
             HandleAITurn();
         }
     }
@@ -78,7 +73,7 @@ public class GameController : MonoBehaviour {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
         }
 
-        //EvaluateStateWithDebug(newNode);//デバッグ用
+        //EvaluateStateWithDebug(newNode);
         Debug.Log("評価値: " + newNode.eval);
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
@@ -122,8 +117,7 @@ public class GameController : MonoBehaviour {
             komaSize = selectedKoma.GetComponent<Koma>().size;
             komaPos = selectedKoma.GetComponent<Koma>().pos;
 
-            availablePositionsList = GetAvailablePositonsList(state);
-            bool canPlaceFromMochigoma = availablePositionsList.Count > 0;
+            bool canPlaceFromMochigoma = GetAvailablePositonsList(state).Count > 0;
 
             // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
             if (komaPos != -1 && canPlaceFromMochigoma) {
@@ -144,9 +138,7 @@ public class GameController : MonoBehaviour {
 
             // 選択した駒が盤面にあり、持ち駒から置ける場所がない場合
             Debug.Log("選択した駒を持ち駒に追加します");
-            //その時の手番のプレイヤーの持ち駒リストに加える
             currentPlayerMochigoma.AddKoma(komaSize);
-            //移動元の位置のリストから最後尾の駒を削除
             List<List<int>> banmen = state.banmen.GetBanmen();
             banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
 
@@ -167,7 +159,6 @@ public class GameController : MonoBehaviour {
         RaycastHit hit;
 
         Vector3 mousePosition = Input.mousePosition;
-        // カメラからの固定距離をスクリーン座標でのZ値として設定
         mousePosition.z = 10.0f;
         Vector3 newPosition = Camera.main.ScreenToWorldPoint(mousePosition);
 
@@ -234,7 +225,7 @@ public class GameController : MonoBehaviour {
         }
         //移動先により大きい駒があるなら、駒を置かずに処理を終了
         if (Math.Abs(lastElementsArray[positionNumber]) >= Math.Abs(komaSize)) {
-            //lastElementsArray[positionNumber]をログに出力
+
             Debug.Log("lastElementsArray[positionNumber]: " + lastElementsArray[positionNumber]);
             //選択した駒の元の位置(komaPos)に戻す処理
             ResetKomaPosition();
@@ -268,8 +259,7 @@ public class GameController : MonoBehaviour {
 
         selectedKoma = null;
 
-        //現在位置、移動先、駒のサイズを引数にOperatorクラスのインスタンスを生成
-        op = new Operator(availablePositionsList, komaPos, positionNumber, komaSize);
+        op = new Operator(komaPos, positionNumber, komaSize);
 
         State newState = Put(state, op);
         ApplyMove(newState);
@@ -577,7 +567,7 @@ public class GameController : MonoBehaviour {
                 int targetPiece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
 
                 if (targetPiece == 0 || CanCoverPiece(koma, targetPiece)) {
-                    operators.Add(new Operator(null, pos, koma));//これのせい？？
+                    operators.Add(new Operator(pos, koma));
                 }
             }
         }
@@ -666,18 +656,6 @@ public class GameController : MonoBehaviour {
             return true;
         }
         return false;
-
-        /*// 移動先が空きマスまたは覆える駒である場合
-        if (targetStack.Count == 0 || CanCoverPiece(op.koma, targetStack[targetStack.Count - 1])) {
-            //いったんコメントアウト
-            //Debug.Log("Valid move: targetStack = " + (targetStack.Count == 0 ? "empty" : targetStack[targetStack.Count - 1].ToString()) + ", op.koma = " + op.koma);
-            return true;
-        }
-        else {
-            //いったんコメントアウト
-            //Debug.Log("Invalid move: targetStack = " + targetStack[targetStack.Count - 1] + ", op.koma = " + op.koma);
-            return false;
-        }*/
     }
 
     //両プレイヤーのリーチの数をカウントする関数
@@ -832,16 +810,16 @@ public class GameController : MonoBehaviour {
             case 2:
             case 6:
             case 8:
-                return 100; // 四隅
+                return 100;
             case 4:
-                return 200; // 中央
+                return 200;
             case 1:
             case 3:
             case 5:
             case 7:
-                return 50;  // その他
+                return 50;
             default:
-                return 0;   // 無効な位置
+                return 0;
         }
     }
 
