@@ -12,13 +12,16 @@ public class GameController : MonoBehaviour {
     State state;
     Operator op;
     int[] lastElementsArray; //盤面の各マスの最後の要素を格納する配列
-    private GameObject selectedKoma;//Unityで選択された駒を格納するための変数
-
-    public LayerMask komaLayer; // Koma用のレイヤーマスク
-    public LayerMask positionLayer;  // Position用のレイヤーマスク
+    private GameObject selectedKoma;
     private Vector3 originalPosition;
-    public GameObject[] goteKomas;
-    public Text resultText;
+    [SerializeField]
+    private LayerMask komaLayer; // Koma用のレイヤーマスク
+    [SerializeField]
+    private LayerMask positionLayer;  // Position用のレイヤーマスク
+    [SerializeField]
+    private GameObject[] goteKomas;
+    [SerializeField]
+    private Text resultText;
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -312,7 +315,7 @@ public class GameController : MonoBehaviour {
         if (sourceNumber >= 0 && sourceNumber < 9) {
             // sourceNumberの位置から駒を削除することをログに出力
             Debug.Log("Removing Koma from sourceNumber: " + sourceNumber);
-            RemoveKomaFromLastElementsArray(sourceNumber);//要は盤面からけせばいいんだから、いらんくね
+            GetAvailablePositonsList(state);//置けるところリスト更新のためにおいた
             //banmenのsourceNumber行の最後尾の駒を削除
             banmen[sourceNumber].RemoveAt(banmen[sourceNumber].Count - 1);
         }
@@ -334,48 +337,11 @@ public class GameController : MonoBehaviour {
 
     }
 
-    void RemoveKomaFromLastElementsArray(int position) {
-        List<List<int>> banmen = state.banmen.GetBanmen();
-        if (position < 0 || position >= banmen.Count) {
-            Debug.LogError("Position is out of range: " + position);
-            return;
-        }
-
-        List<int> column = banmen[position];
-        if (column.Count > 0) {
-            int removedKoma = column[column.Count - 1];
-            column.RemoveAt(column.Count - 1); // 最後の駒を削除
-            Debug.Log("Removed koma: " + removedKoma + " from position: " + position);
-
-            if (column.Count > 0) {
-                lastElementsArray[position] = column[column.Count - 1]; // 下の駒を代入
-                Debug.Log("Updated lastElementsArray[" + position + "]: " + lastElementsArray[position]);
-            }
-            else {
-                lastElementsArray[position] = 0; // 駒がなくなった場合は0を代入
-                Debug.Log("No more pieces at position: " + position);
-            }
-
-            // stateの盤面情報を更新
-            state.banmen.SetBanmen(banmen);
-            //banmenは9つのリストからなるので、9行に分けてログに出力
-            for (int i = 0; i < banmen.Count; i++) {
-                Debug.Log($"banmen[{i}]: " + string.Join(", ", banmen[i]));
-            }
-        }
-        else {
-            Debug.LogError("No pieces to remove at position: " + position);
-        }
-
-        GetAvailablePositonsList(state);
-    }
-
     GameObject FindKoma(int size, int sourcePos) {
         // goteKomas 配列内のすべての GameObject をチェック
         foreach (GameObject komaObject in goteKomas) {
             Koma koma = komaObject.GetComponent<Koma>();
             //koma.posとsourcePos、koma.sizeとsizeを全てログに出力
-            //Debug.Log($"koma.pos: {koma.pos}, sourcePos: {sourcePos}, koma.size: {koma.size}, size: {size}");
             if (koma != null && koma.pos == sourcePos && koma.size == size && koma.player == -1) {
                 return komaObject;
             }
@@ -446,9 +412,6 @@ public class GameController : MonoBehaviour {
                 Debug.LogWarning("No pieces to remove at source position: " + op.sourcePos);
             }
         }
-        /*else {
-            Debug.LogWarning("Source position is out of range: " + op.sourcePos);
-        }*/
         // 駒を置く処理
         banmen[op.targetPos].Add(op.koma);
 
