@@ -76,7 +76,6 @@ public class GameController : MonoBehaviour {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
         }
 
-        //EvaluateStateWithDebug(newNode);
         Debug.Log("評価値: " + newNode.eval);
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
@@ -948,88 +947,4 @@ public class GameController : MonoBehaviour {
         node.eval = evaluation;
         return evaluation;
     }
-
-    int EvaluateStateWithDebug(Node node) {
-        State currentState = node.state; // 現在の状態を取得
-        State parentState = node.parentState; // 親ノードの状態を取得
-        int evaluation = 0;
-
-        // opがnullでないことを確認
-        if (node.op == null) {
-            Debug.LogError("op is null in EvaluateStateWithDebug");
-            return 0;
-        }
-
-        GameResult result = CheckWinner(currentState);
-        // 後手のビンゴラインが揃っている場合は1000点を加算
-        if (result == GameResult.GoteWin) {
-            evaluation += 1000;
-            Debug.Log("GoteWin: +1000, Evaluation: " + evaluation);
-        }
-        // 先手のビンゴラインが揃っている場合は-10000点を加算
-        if (result == GameResult.SenteWin) {
-            evaluation -= 10000;
-            Debug.Log("SenteWin: -10000, Evaluation: " + evaluation);
-        }
-        // op.komaが相手の上に被せている場合、+150点
-        if (CheckCoveringMove(currentState, node.op)) {
-            evaluation += 150;
-            Debug.Log("CoveringMove: +150, Evaluation: " + evaluation);
-        }
-
-        // 潰せたプレイヤーのリーチの数をカウント
-        int blockedReaches = CountBlockedReaches(parentState, currentState);
-        evaluation += blockedReaches * 150;
-        Debug.Log("BlockedReaches: +" + (blockedReaches * 150) + ", Evaluation: " + evaluation);
-
-        // currentStateにおける敵AIのリーチ数×25点evaluationに加算
-        var reachCounts = CountReachWithDebug(currentState);
-        int goteReachCount = reachCounts.goteReachCount;
-        evaluation += goteReachCount * 25;
-        Debug.Log("GoteReachCount: +" + (goteReachCount * 25) + ", Evaluation: " + evaluation);
-
-        // 置いたマス目ごとに点数を付ける
-        int positionScore = GetPositionScore(node.op.targetPos);
-        evaluation += positionScore;
-        Debug.Log("PositionScore: +" + positionScore + ", Evaluation: " + evaluation);
-
-        // 最終評価値を返す
-        Debug.Log("Final Evaluation: " + evaluation);
-        node.eval = evaluation; // ここを追加
-        return evaluation;
-    }
-
-
-    public (int senteReachCount, int goteReachCount) CountReachWithDebug(State currentState) {
-        int senteReachCount = 0;
-        int goteReachCount = 0;
-
-        // リーチ判定に使用するポジションのリストを定義
-        List<List<int>> positionsList = new List<List<int>> {
-                new List<int> { 0, 1, 2 },
-                new List<int> { 3, 4, 5 },
-                new List<int> { 6, 7, 8 },
-                new List<int> { 0, 3, 6 },
-                new List<int> { 1, 4, 7 },
-                new List<int> { 2, 5, 8 },
-                new List<int> { 0, 4, 8 },
-                new List<int> { 2, 4, 6 }
-            };
-
-        foreach (var positions in positionsList) {
-            if (IsReach(1, positions, currentState)) {
-                senteReachCount++;
-                //Debug.Log($"Sente reach found at positions: {string.Join(", ", positions)}");
-            }
-            if (IsReach(-1, positions, currentState)) {
-                goteReachCount++;
-                //Debug.Log($"Gote reach found at positions: {string.Join(", ", positions)}");
-            }
-        }
-
-        return (senteReachCount, goteReachCount);
-    }
-
-
-
 }
