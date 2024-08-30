@@ -203,7 +203,13 @@ public class GameController : MonoBehaviour {
 
         int komaSize = selectedKoma.GetComponent<Koma>().size;
         int komaPos = selectedKoma.GetComponent<Koma>().pos;
-        int positionNumber = hit.collider.gameObject.GetComponent<Position>().number;
+
+        Position positionComponent = hit.collider.gameObject.GetComponent<Position>();
+        if (positionComponent == null) {
+            Debug.LogWarning("Position component not found on the hit object.");
+            return;
+        }
+        int positionNumber = positionComponent.Number;
 
         Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
 
