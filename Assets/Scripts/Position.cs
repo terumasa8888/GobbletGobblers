@@ -1,4 +1,9 @@
 using UnityEngine;
 public class Position : MonoBehaviour {
-    public int number;
+    [SerializeField]
+    private int number;
+
+    public int Number {
+        get { return number; }
+    }
 }

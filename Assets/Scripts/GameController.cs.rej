@@ -1,0 +1,22 @@
+diff a/Assets/Scripts/GameController.cs b/Assets/Scripts/GameController.cs	(rejected hunks)
+@@ -45,20 +45,16 @@
+         if (isGameOver) return;
+ 
+         if (state.turn % 2 == 1) {
+-            // ドラッグ開始
+             if (Input.GetMouseButtonDown(0)) {
+                 HandlePieceSelection();
+             }
+-            // ドラッグ中に駒をマウスに追従させる
+             if (Input.GetMouseButton(0) && selectedKoma != null) {
+                 FollowCursor();
+             }
+-            // ドロップ（マウスを離した時）
+             if (Input.GetMouseButtonUp(0) && selectedKoma != null) {
+                 HandlePieceDrop();
+             }
+         } else {
+-            // 後手のターン（偶数ターン）
+             HandleAITurn();
+         }
+     }
