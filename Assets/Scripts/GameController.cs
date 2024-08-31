@@ -239,9 +239,6 @@ public class GameController : MonoBehaviour {
                     banmen[komaPos].Add(komaSize); // リストが空の場合、新しい要素を追加
                 }
             }
-            else {
-                Debug.LogError("komaPos is out of range: " + komaPos);
-            }
             return;
         }
 
@@ -307,9 +304,6 @@ public class GameController : MonoBehaviour {
 
         // sourceNumberが盤面の範囲内である場合にのみ、駒を削除し、下の駒を代入
         if (sourceNumber >= 0 && sourceNumber < 9) {
-            // sourceNumberの位置から駒を削除することをログに出力
-            Debug.Log("Removing Koma from sourceNumber: " + sourceNumber);
-
             state.UpdateAvailablePositionsList();
 
             //banmenのsourceNumber行の最後尾の駒を削除
@@ -417,7 +411,6 @@ public class GameController : MonoBehaviour {
 
     //ビンゴラインが揃っているかどうかを判定する関数
     private bool HasWinningLine(int[,] array) {
-        // 縦、横の勝利条件をチェック
         for (int i = 0; i < 3; i++) {
             if ((array[i, 0] == 1 && array[i, 1] == 1 && array[i, 2] == 1) ||
                 (array[0, i] == 1 && array[1, i] == 1 && array[2, i] == 1)) {
@@ -425,7 +418,6 @@ public class GameController : MonoBehaviour {
             }
         }
 
-        // 斜めの勝利条件をチェック
         if ((array[0, 0] == 1 && array[1, 1] == 1 && array[2, 2] == 1) ||
             (array[0, 2] == 1 && array[1, 1] == 1 && array[2, 0] == 1)) {
             return true;
@@ -434,16 +426,14 @@ public class GameController : MonoBehaviour {
     }
 
     // 現在の盤面の状態を3×3の二次元配列に変換し、ログに出力する関数
-    void PrintCurrentBanmen(State state) {
+    void PrintCurrentBanmen(State state) {//合格。疎結合になっている
         int[,] currentBanmen = new int[3, 3];
-        // 盤面の状態を一時変数に格納
         List<List<int>> banmen = state.banmen.GetBanmen();
 
         for (int i = 0; i < banmen.Count; i++) {
             int row = i / 3;
             int col = i % 3;
             List<int> stack = banmen[i];
-            // リストの最後の要素をとってきてcurrentBanmen[row, col]に代入。空の場合は0を代入
             currentBanmen[row, col] = stack.Count > 0 ? stack[stack.Count - 1] : 0;
         }
 
