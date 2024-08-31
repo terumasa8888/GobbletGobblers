@@ -11,13 +11,12 @@ public class GameController : MonoBehaviour {
     bool isGameOver;
     State state;
     Operator op;
-    int[] lastElementsArray; //盤面の各マスの最後の要素を格納する配列
     private GameObject selectedKoma;
     private Vector3 originalPosition;
     [SerializeField]
-    private LayerMask komaLayer; // Koma用のレイヤーマスク
+    private LayerMask komaLayer;
     [SerializeField]
-    private LayerMask positionLayer;  // Position用のレイヤーマスク
+    private LayerMask positionLayer;
     [SerializeField]
     private GameObject[] goteKomas;
     [SerializeField]
@@ -33,8 +32,7 @@ public class GameController : MonoBehaviour {
     void Start() {
         isGameOver = false;
         state = new State(new Banmen(), new Mochigoma(3, 3, 2, 2, 1, 1), new Mochigoma(-3, -3, -2, -2, -1, -1));
-        lastElementsArray = new int[9];
-        GetAvailablePositonsList(state);
+        state.UpdateAvailablePositionsList();
 
         if (goteKomas == null || goteKomas.Length == 0) {
             Debug.LogError("goteKomas array is not initialized or empty.");
@@ -63,7 +61,7 @@ public class GameController : MonoBehaviour {
     }
 
     void HandleAITurn() {
-        GetAvailablePositonsList(state);
+        state.UpdateAvailablePositionsList();
         Node newNode = getNext(state, 3);
 
         if (newNode != null && newNode.op != null) {
@@ -114,7 +112,8 @@ public class GameController : MonoBehaviour {
             komaSize = selectedKoma.GetComponent<Koma>().size;
             komaPos = selectedKoma.GetComponent<Koma>().pos;
 
-            bool canPlaceFromMochigoma = GetAvailablePositonsList(state).Count > 0;
+            state.UpdateAvailablePositionsList();
+            bool canPlaceFromMochigoma = state.AvailablePositionsList().Count > 0;
 
             // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
             if (komaPos != -1 && canPlaceFromMochigoma) {
@@ -176,7 +175,7 @@ public class GameController : MonoBehaviour {
         RaycastHit hit;
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.blue, 5.0f);
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
-            GetAvailablePositonsList(state);
+            state.UpdateLastElementsArray();
             PlaceSelectedKomaOnPosition(hit);
             UpdateMochigoma(state, op);
             Debug.Log("ターン数: " + state.turn);
@@ -220,10 +219,11 @@ public class GameController : MonoBehaviour {
             }
             return;
         }
-        //移動先により大きい駒があるなら、駒を置かずに処理を終了
-        if (Math.Abs(lastElementsArray[positionNumber]) >= Math.Abs(komaSize)) {
 
-            Debug.Log("lastElementsArray[positionNumber]: " + lastElementsArray[positionNumber]);
+        state.UpdateLastElementsArray();
+        //移動先により大きい駒があるなら、駒を置かずに処理を終了
+        if (Math.Abs(state.LastElementsArray()[positionNumber]) >= Math.Abs(komaSize)) {
+
             //選択した駒の元の位置(komaPos)に戻す処理
             ResetKomaPosition();
             Debug.Log("選択した駒より大きい駒の上に置くことはできません");
@@ -309,7 +309,9 @@ public class GameController : MonoBehaviour {
         if (sourceNumber >= 0 && sourceNumber < 9) {
             // sourceNumberの位置から駒を削除することをログに出力
             Debug.Log("Removing Koma from sourceNumber: " + sourceNumber);
-            GetAvailablePositonsList(state);//置けるところリスト更新のためにおいた
+
+            state.UpdateAvailablePositionsList();
+
             //banmenのsourceNumber行の最後尾の駒を削除
             banmen[sourceNumber].RemoveAt(banmen[sourceNumber].Count - 1);
         }
@@ -322,13 +324,11 @@ public class GameController : MonoBehaviour {
 
         komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
 
-        lastElementsArray[positionNumber] = komaSize;
-        GetAvailablePositonsList(state);
-
         // stateの盤面情報を更新
         banmen[positionNumber].Add(komaSize);
         newNode.state.banmen.SetBanmen(banmen);
-
+        newNode.state.UpdateAvailablePositionsList();
+        newNode.state.UpdateLastElementsArray();
     }
 
     GameObject FindKoma(int size, int sourcePos) {
@@ -354,35 +354,6 @@ public class GameController : MonoBehaviour {
         }
     }
 
-    //駒を置ける場所のリストを計算する関数
-    public List<int> GetAvailablePositonsList(State state) {
-        List<List<int>> banmen = state.banmen.GetBanmen();
-        int maxKomaSize = 0;
-        List<int> availablePositionsList = new List<int>();
-
-        List<int> currentMochigoma = state.turn % 2 == 1 ? state.sente.GetMochigoma() : state.gote.GetMochigoma();
-        //現在の持ち駒の中で絶対値が最も大きいもののサイズをmaxKomaSizeに格納
-        foreach (int komaSize in currentMochigoma) {
-            if (Math.Abs(komaSize) > maxKomaSize) {
-                maxKomaSize = Math.Abs(komaSize);
-            }
-        }
-        //各マスの最後の要素を取得し、lastElementsArrayに格納
-        for (int i = 0; i < banmen.Count; i++) {
-            if (banmen[i].Count <= 0) {
-                Debug.Log($"banmen[{i}] は空です。");
-            }
-            int lastElement = banmen[i][banmen[i].Count - 1];
-            lastElementsArray[i] = lastElement;
-
-            if (Math.Abs(lastElement) < maxKomaSize) {
-                availablePositionsList.Add(i);
-            }
-        }
-        return availablePositionsList;
-    }
-
-
     //駒を置いた後の状態を生成する状態遷移関数
     State Put(State state, Operator op) {
         // オペレータが有効かどうかをチェック
@@ -405,10 +376,6 @@ public class GameController : MonoBehaviour {
         // 駒を置く処理
         banmen[op.targetPos].Add(op.koma);
 
-        //laseElementsArrayも、グローバル変数じゃなくメンバー変数で持つ必要がある?
-        //てかこれいる？
-        //lastElementsArray[op.targetPos] = op.koma;
-
         newState.NextTurn();
 
         return newState;
@@ -417,21 +384,9 @@ public class GameController : MonoBehaviour {
     void ApplyMove(State newState) {
         // 現在の状態を新しい状態に更新
         this.state = newState;
-        lastElementsArray = new int[9];
-        for (int i = 0; i < 9; i++) {
-            List<int> column = state.banmen.GetBanmen()[i];
-            if (column.Count > 0) {
-                lastElementsArray[i] = column[column.Count - 1];
-            }
-            else {
-                lastElementsArray[i] = 0;
-            }
-        }
 
-        // 現在の盤面の状態をログに出力
+        state.UpdateLastElementsArray();
         PrintCurrentBanmen(newState);
-        //ここでlastElementsArrayもログに出力
-        Debug.Log("lastElementsArray: " + string.Join(", ", lastElementsArray));
     }
 
     private void UpdateMochigoma(State state, Operator op) {
@@ -510,7 +465,6 @@ public class GameController : MonoBehaviour {
         // プレイヤーの持ち駒のリストを取得
         List<int> mochigoma = isMaximizingPlayer ? state.gote.GetMochigoma() : state.sente.GetMochigoma();
 
-        // 盤面の状態を取得
         List<List<int>> board = state.banmen.GetBanmen();
 
         // 持ち駒を空きマスまたは覆えるマスに置く操作を生成
@@ -539,7 +493,7 @@ public class GameController : MonoBehaviour {
         int player = isMaximizingPlayer ? -1 : 1;//ここが逆だった
 
         // lastElementsArrayを更新
-        int[] lastElementsArray = new int[banmen.Count];
+        int[] lastElementsArray = new int[banmen.Count];//ここもlastElementsArrayを使ってるので注意
         for (int i = 0; i < banmen.Count; i++) {
             if (banmen[i].Count > 0) {
                 lastElementsArray[i] = banmen[i][banmen[i].Count - 1];
@@ -677,7 +631,7 @@ public class GameController : MonoBehaviour {
     }
 
 
-    //勝利判定のために、1を自分の駒とした二次元配列を返す関数
+    //勝利判定のために、自分の駒を1、それ以外を0とした二次元配列を返す関数
     private (int[,], int[,]) CreateBinaryArrays(State state) {
         int[,] senteArray = new int[3, 3];
         int[,] goteArray = new int[3, 3];
@@ -703,13 +657,10 @@ public class GameController : MonoBehaviour {
     //AIがその手がプレイヤーの駒の上から被せる手かどうかを判定する関数
     public bool CheckCoveringMove(State currentState, Operator op) {
 
-        // currentStateがnullでないことを確認
         if (currentState == null) {
             Debug.LogError("currentState is null");
             return false;
         }
-
-        // opがnullでないことを確認
         if (op == null) {
             Debug.LogError("op is null");
             return false;
@@ -717,22 +668,17 @@ public class GameController : MonoBehaviour {
 
         //currentStateの盤面の状態を一時変数に格納
         List<List<int>> banmen = currentState.banmen.GetBanmen();
-
-        // banmenがnullでないことを確認
         if (banmen == null) {
             Debug.LogError("banmen is null");
             return false;
         }
 
-        // targetPosが有効なインデックスであることを確認
         if (op.targetPos < 0 || op.targetPos >= banmen.Count) {
             Debug.LogError("targetPos is out of range");
             return false;
         }
 
-        //op.targetPosのリストを取得
         List<int> targetPosKomas = banmen[op.targetPos];
-        // targetPosKomasがnullでないことを確認
         if (targetPosKomas == null) {
             Debug.LogError("targetPosKomas is null");
             return false;
@@ -880,7 +826,8 @@ public class GameController : MonoBehaviour {
         List<(State, Operator)> possibleMoves = new List<(State, Operator)>();
 
         // 持ち駒から置ける場所のリストを取得
-        List<int> availablePositions = GetAvailablePositonsList(state);
+        state.UpdateAvailablePositionsList();
+        List<int> availablePositions = state.AvailablePositionsList();
 
         if (availablePositions.Count > 0) {
             // 持ち駒から置ける場合
