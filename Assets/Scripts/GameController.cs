@@ -369,20 +369,16 @@ public class GameController : MonoBehaviour {
         }
         //各マスの最後の要素を取得し、lastElementsArrayに格納
         for (int i = 0; i < banmen.Count; i++) {
-            if (banmen[i].Count > 0) {
-                int lastElement = banmen[i][banmen[i].Count - 1];
-                lastElementsArray[i] = lastElement;
-
-                if (Math.Abs(lastElement) < maxKomaSize) {
-                    availablePositionsList.Add(i);
-                }
+            if (banmen[i].Count <= 0) {
+                Debug.LogError($"banmen[{i}] は空です。");
             }
-            else {
-                Debug.Log($"banmen[{i}] は空です。");
+            int lastElement = banmen[i][banmen[i].Count - 1];
+            lastElementsArray[i] = lastElement;
+
+            if (Math.Abs(lastElement) < maxKomaSize) {
+                availablePositionsList.Add(i);
             }
         }
-
-
         return availablePositionsList;
     }
 
