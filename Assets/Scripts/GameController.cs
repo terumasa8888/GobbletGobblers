@@ -73,7 +73,7 @@ public class GameController : MonoBehaviour {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
         }
 
-        Debug.Log("評価値: " + newNode.eval);
+        Debug.Log("評価値: " + newNode.Eval());
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
         PrintCurrentBanmen(state);
@@ -370,7 +370,7 @@ public class GameController : MonoBehaviour {
         //各マスの最後の要素を取得し、lastElementsArrayに格納
         for (int i = 0; i < banmen.Count; i++) {
             if (banmen[i].Count <= 0) {
-                Debug.LogError($"banmen[{i}] は空です。");
+                Debug.Log($"banmen[{i}] は空です。");
             }
             int lastElement = banmen[i][banmen[i].Count - 1];
             lastElementsArray[i] = lastElement;
@@ -782,13 +782,13 @@ public class GameController : MonoBehaviour {
         Node root = new Node(state, null, null);
         // 偶数ターンはAIプレイヤー
         bool isMaximizingPlayer = state.turn % 2 == 0;
-        int bestValue = Minimax(root, depth, isMaximizingPlayer);
+        int bestValue = Minimax(root, depth, isMaximizingPlayer);//引数rootに変更を加えてしまっている
 
         Node bestMove = null;
 
         // 子ノードをすべて調べて最適な手を見つける
-        foreach (Node child in root.children) {
-            if (child.eval == bestValue) {
+        foreach (Node child in root.Children()) {
+            if (child.Eval() == bestValue) {
                 bestMove = child;
                 break;
             }
@@ -808,8 +808,9 @@ public class GameController : MonoBehaviour {
     int Minimax(Node node, int depth, bool isMaximizingPlayer) {
         // 探索の深さが0またはゲームが終了している場合、評価値を返す
         if (depth == 0 || IsGameOver(node.state)) {
-            node.eval = Evaluate(node); // そのノードの評価値を評価関数から計算
-            return node.eval;
+            int evaluation = Evaluate(node);
+            node.SetEval(evaluation);
+            return node.Eval();
         }
 
         // 敵AIが得点最大化プレイヤーの場合
@@ -824,19 +825,20 @@ public class GameController : MonoBehaviour {
                     continue;
                 }
                 Node childNode = new Node(childState, node.state, op);
-                node.children.Add(childNode);
+                node.AddChild(childNode);
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
                 if (CheckWinner(childState) == GameResult.GoteWin) {
-                    node.eval = Evaluate(childNode);
-                    return node.eval;
+                    int evaluation = Evaluate(childNode);
+                    node.SetEval(evaluation);
+                    return node.Eval();
                 }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
-                int eval = Minimax(childNode, depth - 1, false);
-                maxEval = Math.Max(maxEval, eval);
+                int childEvaluation = Minimax(childNode, depth - 1, false);
+                maxEval = Math.Max(maxEval, childEvaluation);
                 
             }
-            node.eval = maxEval;
+            node.SetEval(maxEval);
             return maxEval;
         }
         // 得点最小化プレイヤーの場合
@@ -850,19 +852,20 @@ public class GameController : MonoBehaviour {
                     continue;
                 }
                 Node childNode = new Node(childState, node.state, op);
-                node.children.Add(childNode);
+                node.AddChild(childNode);
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
                 if (CheckWinner(childState) == GameResult.SenteWin) {
-                    node.eval = Evaluate(childNode);
-                    return node.eval;
+                    int evaluation = Evaluate(childNode);
+                    node.SetEval(evaluation);
+                    return node.Eval();
                 }
                 // 再帰的にMinimaxを呼び出し、評価値を計算
-                int eval = Minimax(childNode, depth - 1, true);
-                minEval = Math.Min(minEval, eval);
+                int childEvaluation = Minimax(childNode, depth - 1, true);
+                minEval = Math.Min(minEval, childEvaluation);
                 
             }
-            node.eval = minEval;
+            node.SetEval(minEval);
             return minEval;
         }
     }
@@ -927,7 +930,7 @@ public class GameController : MonoBehaviour {
         int positionScore = GetPositionScore(node.op.targetPos);
         evaluation += positionScore;
 
-        node.eval = evaluation;
+        node.SetEval(evaluation);
         return evaluation;
     }
 }
