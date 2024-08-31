@@ -269,9 +269,9 @@ public class GameController : MonoBehaviour {
     }
 
     void MoveAIPiece(Node newNode) {
-        int komaSize = newNode.op.koma;
-        int sourceNumber = newNode.op.sourcePos;
-        int positionNumber = newNode.op.targetPos;
+        int komaSize = newNode.op.KomaSize();
+        int sourceNumber = newNode.op.SourcePos();
+        int positionNumber = newNode.op.TargetPos();
 
         List<List<int>> banmen = newNode.state.banmen.GetBanmen();
 
@@ -359,16 +359,17 @@ public class GameController : MonoBehaviour {
         List<List<int>> banmen = newState.banmen.GetBanmen();
 
         // 盤面上の移動の際、駒を移動元から削除する処理を追加
-        if (op.sourcePos >= 0 && op.sourcePos < banmen.Count) {
-            if (banmen[op.sourcePos].Count > 0) {
-                banmen[op.sourcePos].RemoveAt(banmen[op.sourcePos].Count - 1);
+        int sourcePos = op.SourcePos();
+        if (sourcePos >= 0 && sourcePos < banmen.Count) {
+            if (banmen[sourcePos].Count > 0) {
+                banmen[sourcePos].RemoveAt(banmen[sourcePos].Count - 1);
             }
             else {
-                Debug.LogWarning("No pieces to remove at source position: " + op.sourcePos);
+                Debug.LogWarning("No pieces to remove at source position: " + sourcePos);
             }
         }
         // 駒を置く処理
-        banmen[op.targetPos].Add(op.koma);
+        banmen[op.TargetPos()].Add(op.KomaSize());
 
         newState.NextTurn();
 
@@ -384,11 +385,12 @@ public class GameController : MonoBehaviour {
     }
 
     private void UpdateMochigoma(State state, Operator op) {
-        if (op.koma > 0) {
-            state.sente.RemoveKoma(op.koma);
+        int komaSize = op.KomaSize();
+        if (komaSize > 0) {
+            state.sente.RemoveKoma(komaSize);
         }
         else {
-            state.gote.RemoveKoma(op.koma);
+            state.gote.RemoveKoma(komaSize);
         }
         // 先手と後手の持ち駒を一つのログメッセージとして表示
         string senteMochigoma = "Current Sente Mochigoma: " + string.Join(", ", state.sente.GetMochigoma());
@@ -536,20 +538,17 @@ public class GameController : MonoBehaviour {
             return false;
         }
 
-        // 盤面の状態を取得
         List<List<int>> banmen = state.banmen.GetBanmen();
-
-        // pos<0またはpos>=9の場合、IndexOutOfRangeExceptionをスロー
-        if (op.targetPos < 0 || op.targetPos >= banmen.Count) {
-            //targetPosをログに出力
-            Debug.Log("targetPos: " + op.targetPos);
+        int targetPos = op.TargetPos();
+        if (targetPos < 0 || targetPos >= banmen.Count) {
+            Debug.Log("targetPos: " + targetPos);
             Debug.LogError("IndexOutOfRangeException: Index was outside the bounds of the array.");
             return false; // 範囲外の場合は、処理を中断してstateをそのまま返す
         }
 
-        List<int> targetStack = banmen[op.targetPos];
+        List<int> targetStack = banmen[targetPos];
         int targetPiece = targetStack[targetStack.Count - 1];
-        if (targetPiece == 0 || CanCoverPiece(op.koma, targetPiece)) {
+        if (targetPiece == 0 || CanCoverPiece(op.KomaSize(), targetPiece)) {
             return true;
         }
         return false;
@@ -663,12 +662,13 @@ public class GameController : MonoBehaviour {
             return false;
         }
 
-        if (op.targetPos < 0 || op.targetPos >= banmen.Count) {
+        int targetPos = op.TargetPos();
+        if (targetPos < 0 || targetPos >= banmen.Count) {
             Debug.LogError("targetPos is out of range");
             return false;
         }
 
-        List<int> targetPosKomas = banmen[op.targetPos];
+        List<int> targetPosKomas = banmen[op.TargetPos()];
         if (targetPosKomas == null) {
             Debug.LogError("targetPosKomas is null");
             return false;
@@ -676,7 +676,7 @@ public class GameController : MonoBehaviour {
         //op.targetPosのリストの最後の要素を取得
         int lastElement = targetPosKomas.Count > 0 ? targetPosKomas[targetPosKomas.Count - 1] : 0;
         //op.komaとlastElementの絶対値を比較して、op.komaがlastElementに被せることができるかどうかを判定
-        return Math.Abs(op.koma) > Math.Abs(lastElement);
+        return Math.Abs(op.KomaSize()) > Math.Abs(lastElement);
     }
 
     //AIがその手がプレイヤーのリーチを潰した数を計算する関数
@@ -864,7 +864,7 @@ public class GameController : MonoBehaviour {
         int goteReachCount = CountReach(currentState).goteReachCount;
         evaluation += goteReachCount * 25;
 
-        int positionScore = GetPositionScore(node.op.targetPos);
+        int positionScore = GetPositionScore(node.op.TargetPos());
         evaluation += positionScore;
 
         node.SetEval(evaluation);
