@@ -45,7 +45,7 @@ public class GameController : MonoBehaviour {
     void Update() {
         if (isGameOver) return;
 
-        if (state.turn % 2 == 1) {
+        if (state.isSenteTurn()) {
             if (Input.GetMouseButtonDown(0)) {
                 HandlePieceSelection();
             }
@@ -98,9 +98,9 @@ public class GameController : MonoBehaviour {
             originalPosition = selectedKoma.transform.position;
             Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
 
-            int currentPlayer = state.turn % 2 == 1 ? 1 : -1;
+            int currentPlayer = state.isSenteTurn() ? 1 : -1;
 
-            Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
+            Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
             int komaSize = 0;
             int komaPos = -1;
 
@@ -178,7 +178,7 @@ public class GameController : MonoBehaviour {
             state.UpdateLastElementsArray();
             PlaceSelectedKomaOnPosition(hit);
             UpdateMochigoma(state, op);
-            Debug.Log("ターン数: " + state.turn);
+            Debug.Log("ターン数: " + state.Turn());
         }
         selectedKoma = null;
     }
@@ -196,7 +196,7 @@ public class GameController : MonoBehaviour {
         }
         int positionNumber = positionComponent.Number;
 
-        Mochigoma currentPlayerMochigoma = state.turn % 2 == 1 ? state.sente : state.gote;
+        Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
 
         //移動前と後が同じ位置なら、駒を元の位置に戻し、移動処理は行わない
         if (positionNumber == komaPos && komaPos != -1) {
@@ -717,7 +717,7 @@ public class GameController : MonoBehaviour {
 
         Node root = new Node(state, null, null);
         // 偶数ターンはAIプレイヤー
-        bool isMaximizingPlayer = state.turn % 2 == 0;
+        bool isMaximizingPlayer = !state.isSenteTurn();
         int bestValue = Minimax(root, depth, isMaximizingPlayer);//引数rootに変更を加えてしまっている
 
         Node bestMove = null;

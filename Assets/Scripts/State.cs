@@ -7,7 +7,7 @@ public class State {
     public Banmen banmen;
     public Mochigoma sente;
     public Mochigoma gote;
-    public int turn;
+    private int turn;
     private int[] lastElementsArray;
     private List<int> availablePositionsList;
 
@@ -33,6 +33,14 @@ public class State {
 
     public void NextTurn() {
         turn++;
+    }
+
+    public int Turn() {
+        return turn;
+    }
+
+    public bool isSenteTurn() {
+        return turn % 2 == 1;
     }
 
     public void UpdateLastElementsArray() {
