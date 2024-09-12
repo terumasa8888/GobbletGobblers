@@ -64,12 +64,11 @@ public class GameController : MonoBehaviour {
         state.UpdateAvailablePositionsList();
         Node newNode = getNext(state, 3);
 
-        if (newNode != null && newNode.op != null) {
-            MoveAIPiece(newNode);
-        }
-        else {
+        if (newNode == null || newNode.op == null) {
             Debug.LogError("HandleAITurn: bestMove or bestMove.op is null");
+            return;
         }
+        MoveAIPiece(newNode);
 
         Debug.Log("評価値: " + newNode.Eval());
         ApplyMove(newNode.state);
@@ -92,61 +91,62 @@ public class GameController : MonoBehaviour {
         RaycastHit hit;
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.red, 5.0f);
 
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
-            selectedKoma = hit.collider.gameObject;
-
-            originalPosition = selectedKoma.transform.position;
-            Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
-
-            int currentPlayer = state.isSenteTurn() ? 1 : -1;
-
-            Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
-            int komaSize = 0;
-            int komaPos = -1;
-
-            if (selectedKomaComponent.player != currentPlayer) {
-                Debug.Log("この駒は現在のプレイヤーのものではありません");
-                selectedKoma = null;
-            }
-  
-            komaSize = selectedKoma.GetComponent<Koma>().size;
-            komaPos = selectedKoma.GetComponent<Koma>().pos;
-
-            state.UpdateAvailablePositionsList();
-            bool canPlaceFromMochigoma = state.AvailablePositionsList().Count > 0;
-
-            // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
-            if (komaPos != -1 && canPlaceFromMochigoma) {
-                Debug.Log("持ち駒から置ける場所があるため、盤面の駒は選択できません");
-                selectedKoma = null;
-                return;
-            }
-            // 選択した駒が持ち駒で、持ち駒から置ける場所がない場合
-            else if (komaPos == -1 && !canPlaceFromMochigoma) {
-                Debug.Log("持ち駒から置ける場所がないため、持ち駒は選択できません");
-                selectedKoma = null;
-                return;
-            }
-            // 選択した駒が持ち駒で、持ち駒から置ける場所がある場合
-            else if(komaPos == -1 && canPlaceFromMochigoma) {
-                return;
-            }
-
-            // 選択した駒が盤面にあり、持ち駒から置ける場所がない場合
-            Debug.Log("選択した駒を持ち駒に追加します");
-            currentPlayerMochigoma.AddKoma(komaSize);
-            List<List<int>> banmen = state.banmen.GetBanmen();
-            banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
-
-            //勝利判定
-            GameResult postMoveResult = CheckWinner(state);
-            if (postMoveResult != GameResult.None) {
-                Debug.Log($"勝利判定: {postMoveResult}");
-                resultText.text = postMoveResult.ToString();
-                PrintCurrentBanmen(state);
-                isGameOver = true;
-            }
+        //if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
+        if (!Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
+            return;
         }
+        selectedKoma = hit.collider.gameObject;
+
+        originalPosition = selectedKoma.transform.position;
+        Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
+
+        int currentPlayer = state.isSenteTurn() ? 1 : -1;
+
+        Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
+        int komaSize = selectedKomaComponent.size;
+        int komaPos = selectedKomaComponent.pos;
+
+        if (selectedKomaComponent.player != currentPlayer) {
+            Debug.Log("この駒は現在のプレイヤーのものではありません");
+            selectedKoma = null;
+            return;
+        }
+
+        state.UpdateAvailablePositionsList();
+        bool canPlaceFromMochigoma = state.AvailablePositionsList().Count > 0;
+
+        // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
+        if (komaPos != -1 && canPlaceFromMochigoma) {
+            Debug.Log("持ち駒から置ける場所があるため、盤面の駒は選択できません");
+            selectedKoma = null;
+            return;
+        }
+        // 選択した駒が持ち駒で、持ち駒から置ける場所がない場合
+        else if (komaPos == -1 && !canPlaceFromMochigoma) {
+            Debug.Log("持ち駒から置ける場所がないため、持ち駒は選択できません");
+            selectedKoma = null;
+            return;
+        }
+        // 選択した駒が持ち駒で、持ち駒から置ける場所がある場合
+        else if(komaPos == -1 && canPlaceFromMochigoma) {
+            return;
+        }
+
+        // 選択した駒が盤面にあり、持ち駒から置ける場所がない場合
+        Debug.Log("選択した駒を持ち駒に追加します");
+        currentPlayerMochigoma.AddKoma(komaSize);
+        List<List<int>> banmen = state.banmen.GetBanmen();
+        banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
+
+        //勝利判定
+        GameResult postMoveResult = CheckWinner(state);
+        if (postMoveResult != GameResult.None) {
+            Debug.Log($"勝利判定: {postMoveResult}");
+            resultText.text = postMoveResult.ToString();
+            PrintCurrentBanmen(state);
+            isGameOver = true;
+        }
+        //}
     }
 
     // マウスカーソルの位置に駒を追従させる関数
