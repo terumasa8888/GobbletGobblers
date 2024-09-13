@@ -10,17 +10,16 @@ public class GameController : MonoBehaviour {
 
     bool isGameOver;
     State state;
-    Operator op;
-    private GameObject selectedKoma;
-    private Vector3 originalPosition;
-    [SerializeField]
-    private LayerMask komaLayer;
-    [SerializeField]
-    private LayerMask positionLayer;
+    //Operator op;
+    /*private GameObject selectedKoma;
+    private Vector3 originalPosition;*/
+    
     [SerializeField]
     private GameObject[] goteKomas;
     [SerializeField]
     private Text resultText;
+
+    private MouseInputHandler mouseInputHandler;
 
     // ゲームの結果を表す列挙型
     public enum GameResult {
@@ -29,10 +28,19 @@ public class GameController : MonoBehaviour {
         GoteWin
     }
 
+
     void Start() {
         isGameOver = false;
         state = new State(new Banmen(), new Mochigoma(3, 3, 2, 2, 1, 1), new Mochigoma(-3, -3, -2, -2, -1, -1));
         state.UpdateAvailablePositionsList();
+
+        GameObject mouseInputHandlerObject = GameObject.Find("MouseInputHandler");
+        if (mouseInputHandlerObject == null) {
+            Debug.LogError("MouseInputHandlerオブジェクトが見つかりませんでした。");
+            return;
+        }
+        mouseInputHandler = mouseInputHandlerObject.GetComponent<MouseInputHandler>();
+        mouseInputHandler.Initialize(this);
 
         if (goteKomas == null || goteKomas.Length == 0) {
             Debug.LogError("goteKomas array is not initialized or empty.");
@@ -45,18 +53,21 @@ public class GameController : MonoBehaviour {
     void Update() {
         if (isGameOver) return;
 
-        if (state.isSenteTurn()) {
-            if (Input.GetMouseButtonDown(0)) {
-                HandlePieceSelection();
-            }
-            if (Input.GetMouseButton(0) && selectedKoma != null) {
-                FollowCursor();
-            }
-            if (Input.GetMouseButtonUp(0) && selectedKoma != null) {
-                HandlePieceDrop();
-            }
-        } else {
+        if (!state.isSenteTurn()) {
             HandleAITurn();
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0)) {
+            mouseInputHandler.HandlePieceSelection();
+        }
+
+        if (Input.GetMouseButton(0)) {
+            mouseInputHandler.FollowCursor();
+        }
+
+        if (Input.GetMouseButtonUp(0)) {
+            mouseInputHandler.HandlePieceDrop();
         }
     }
 
@@ -73,200 +84,12 @@ public class GameController : MonoBehaviour {
         Debug.Log("評価値: " + newNode.Eval());
         ApplyMove(newNode.state);
         UpdateMochigoma(state, newNode.op);
-        PrintCurrentBanmen(state);
 
         //勝利判定
-        GameResult postMoveResult = CheckWinner(state);
-        if (postMoveResult != GameResult.None) {
-            Debug.Log($"勝利判定: {postMoveResult}");
-            resultText.text = postMoveResult.ToString();
-            PrintCurrentBanmen(state);
-            isGameOver = true;
-        }
+        CheckForWin();
     }
 
-    // ドラッグ開始時に駒を選択する関数
-    void HandlePieceSelection() {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-        Debug.DrawRay(ray.origin, ray.direction * 100, Color.red, 5.0f);
-
-        //if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
-        if (!Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
-            return;
-        }
-        selectedKoma = hit.collider.gameObject;
-
-        originalPosition = selectedKoma.transform.position;
-        Koma selectedKomaComponent = selectedKoma.GetComponent<Koma>();
-
-        int currentPlayer = state.isSenteTurn() ? 1 : -1;
-
-        Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
-        int komaSize = selectedKomaComponent.size;
-        int komaPos = selectedKomaComponent.pos;
-
-        if (selectedKomaComponent.player != currentPlayer) {
-            Debug.Log("この駒は現在のプレイヤーのものではありません");
-            selectedKoma = null;
-            return;
-        }
-
-        state.UpdateAvailablePositionsList();
-        bool canPlaceFromMochigoma = state.AvailablePositionsList().Count > 0;
-
-        // 選択した駒が盤面にあり、持ち駒から置ける場所がある場合
-        if (komaPos != -1 && canPlaceFromMochigoma) {
-            Debug.Log("持ち駒から置ける場所があるため、盤面の駒は選択できません");
-            selectedKoma = null;
-            return;
-        }
-        // 選択した駒が持ち駒で、持ち駒から置ける場所がない場合
-        else if (komaPos == -1 && !canPlaceFromMochigoma) {
-            Debug.Log("持ち駒から置ける場所がないため、持ち駒は選択できません");
-            selectedKoma = null;
-            return;
-        }
-        // 選択した駒が持ち駒で、持ち駒から置ける場所がある場合
-        else if(komaPos == -1 && canPlaceFromMochigoma) {
-            return;
-        }
-
-        // 選択した駒が盤面にあり、持ち駒から置ける場所がない場合
-        Debug.Log("選択した駒を持ち駒に追加します");
-        currentPlayerMochigoma.AddKoma(komaSize);
-        List<List<int>> banmen = state.banmen.GetBanmen();
-        banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
-
-        //勝利判定
-        GameResult postMoveResult = CheckWinner(state);
-        if (postMoveResult != GameResult.None) {
-            Debug.Log($"勝利判定: {postMoveResult}");
-            resultText.text = postMoveResult.ToString();
-            PrintCurrentBanmen(state);
-            isGameOver = true;
-        }
-        //}
-    }
-
-    // マウスカーソルの位置に駒を追従させる関数
-    void FollowCursor() {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-
-        Vector3 mousePosition = Input.mousePosition;
-        mousePosition.z = 10.0f;
-        Vector3 newPosition = Camera.main.ScreenToWorldPoint(mousePosition);
-
-        CapsuleCollider komaCapsuleCollider = selectedKoma.GetComponent<CapsuleCollider>();
-        if (komaCapsuleCollider != null) {
-            float komaHeight = komaCapsuleCollider.height;
-            newPosition.y += komaHeight * selectedKoma.transform.localScale.y / 2.0f;
-        }
-        else {
-            newPosition.y += 0.5f;
-        }
-        selectedKoma.transform.position = newPosition;
-    }
-
-    // マウスを離した時に駒を置く関数
-    void HandlePieceDrop() {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-        Debug.DrawRay(ray.origin, ray.direction * 100, Color.blue, 5.0f);
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
-            state.UpdateLastElementsArray();
-            PlaceSelectedKomaOnPosition(hit);
-            UpdateMochigoma(state, op);
-            Debug.Log("ターン数: " + state.Turn());
-        }
-        selectedKoma = null;
-    }
-
-    //駒を置く具体的な処理を行う関数
-    void PlaceSelectedKomaOnPosition(RaycastHit hit) {
-
-        int komaSize = selectedKoma.GetComponent<Koma>().size;
-        int komaPos = selectedKoma.GetComponent<Koma>().pos;
-
-        Position positionComponent = hit.collider.gameObject.GetComponent<Position>();
-        if (positionComponent == null) {
-            Debug.LogWarning("Position component not found on the hit object.");
-            return;
-        }
-        int positionNumber = positionComponent.Number;
-
-        Mochigoma currentPlayerMochigoma = state.isSenteTurn() ? state.sente : state.gote;
-
-        //移動前と後が同じ位置なら、駒を元の位置に戻し、移動処理は行わない
-        if (positionNumber == komaPos && komaPos != -1) {
-            ResetKomaPosition();
-            Debug.Log("現在と同じ位置に駒を置くことはできません");
-            currentPlayerMochigoma.RemoveKoma(komaSize);
-            
-            //持ち上げた駒はいったん削除されているので、元の位置に戻す処理を行う
-            List<List<int>> banmen = state.banmen.GetBanmen();
-            if (komaPos >= 0 && komaPos < banmen.Count) {
-                if (banmen[komaPos].Count > 0) {
-                    banmen[komaPos][banmen[komaPos].Count - 1] = komaSize;
-                }
-                else {
-                    banmen[komaPos].Add(komaSize);
-                }
-            }
-            else {
-                Debug.LogError("komaPos is out of range: " + komaPos);
-            }
-            return;
-        }
-
-        state.UpdateLastElementsArray();
-        //移動先により大きい駒があるなら、駒を置かずに処理を終了
-        if (Math.Abs(state.LastElementsArray()[positionNumber]) >= Math.Abs(komaSize)) {
-
-            //選択した駒の元の位置(komaPos)に戻す処理
-            ResetKomaPosition();
-            Debug.Log("選択した駒より大きい駒の上に置くことはできません");
-            currentPlayerMochigoma.RemoveKoma(komaSize);
-
-            //持ち上げた駒はいったん削除されているので、元の位置に戻す処理を行う
-            List<List<int>> banmen = state.banmen.GetBanmen();
-            if (komaPos >= 0 && komaPos < banmen.Count) {
-                if (banmen[komaPos].Count > 0) {
-                    banmen[komaPos][banmen[komaPos].Count - 1] = komaSize;
-                }
-                else {
-                    banmen[komaPos].Add(komaSize); // リストが空の場合、新しい要素を追加
-                }
-            }
-            return;
-        }
-
-        // 駒をマスの上に配置する処理（駒の底面がマスの上面に来るように調整）
-        float komaHeight = selectedKoma.GetComponent<Collider>().bounds.size.y;
-        Vector3 newPosition = hit.collider.transform.position;
-        newPosition.y += komaHeight / 2;
-        selectedKoma.transform.position = newPosition;
-
-        Koma komaComponent = selectedKoma.GetComponent<Koma>();
-        komaComponent.pos = positionNumber; // 駒が配置された新しい位置に更新
-
-        selectedKoma = null;
-
-        op = new Operator(komaPos, positionNumber, komaSize);
-
-        State newState = Put(state, op);
-        ApplyMove(newState);
-
-        //勝利判定
-        GameResult preMoveResult = CheckWinner(state);
-        if (preMoveResult != GameResult.None) {
-            Debug.Log($"勝利判定: {preMoveResult}");
-            resultText.text = preMoveResult.ToString();
-            PrintCurrentBanmen(newState);
-            isGameOver = true;
-        }
-    }
+    
 
     void MoveAIPiece(Node newNode) {
         int komaSize = newNode.op.KomaSize();
@@ -340,16 +163,10 @@ public class GameController : MonoBehaviour {
         return null;
     }
 
-    // 駒を元の位置に戻す処理を共通化
-    void ResetKomaPosition() {
-        if (selectedKoma != null) {
-            selectedKoma.transform.position = originalPosition;
-            selectedKoma = null;
-        }
-    }
+    
 
     //駒を置いた後の状態を生成する状態遷移関数
-    State Put(State state, Operator op) {
+    public State Put(State state, Operator op) {
         // オペレータが有効かどうかをチェック
         if (!IsValidMove(state, op)) {
             throw new InvalidOperationException("Invalid move");
@@ -376,15 +193,21 @@ public class GameController : MonoBehaviour {
         return newState;
     }
 
-    void ApplyMove(State newState) {
+    public State GetState() {
+        return state;
+    }
+
+    public void ApplyMove(State newState) {
         // 現在の状態を新しい状態に更新
         this.state = newState;
 
         state.UpdateLastElementsArray();
         PrintCurrentBanmen(newState);
+        Debug.Log("Turn: " + state.Turn());
     }
 
-    private void UpdateMochigoma(State state, Operator op) {
+    //持ち駒の更新を行う関数
+    public void UpdateMochigoma(State state, Operator op) {//if文要リファクタ
         int komaSize = op.KomaSize();
         if (komaSize > 0) {
             state.sente.RemoveKoma(komaSize);
@@ -392,9 +215,9 @@ public class GameController : MonoBehaviour {
         else {
             state.gote.RemoveKoma(komaSize);
         }
-        // 先手と後手の持ち駒を一つのログメッセージとして表示
-        string senteMochigoma = "Current Sente Mochigoma: " + string.Join(", ", state.sente.GetMochigoma());
-        string goteMochigoma = "Current Gote Mochigoma: " + string.Join(", ", state.gote.GetMochigoma());
+        // デバッグログを追加して、持ち駒の状態を確認
+        string senteMochigoma = "Updated Sente Mochigoma: " + string.Join(", ", state.sente.GetMochigoma());
+        string goteMochigoma = "Updated Gote Mochigoma: " + string.Join(", ", state.gote.GetMochigoma());
         Debug.Log(senteMochigoma + "\n" + goteMochigoma);
     }
 
@@ -869,5 +692,16 @@ public class GameController : MonoBehaviour {
 
         node.SetEval(evaluation);
         return evaluation;
+    }
+
+    // 勝利判定の処理をメソッドとして分離
+    public void CheckForWin() {
+        GameResult result = CheckWinner(state);
+        if (result != GameResult.None) {
+            Debug.Log($"勝利判定: {result}");
+            resultText.text = result.ToString();
+            PrintCurrentBanmen(state);
+            isGameOver = true;
+        }
     }
 }
