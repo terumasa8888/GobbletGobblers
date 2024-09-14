@@ -8,30 +8,16 @@ using UnityEngine.UI;
 
 public class GameController : MonoBehaviour {
 
-    bool isGameOver;
     State state;
-    //Operator op;
-    /*private GameObject selectedKoma;
-    private Vector3 originalPosition;*/
-    
-    [SerializeField]
-    private GameObject[] goteKomas;
-    [SerializeField]
-    private Text resultText;
-
     private MouseInputHandler mouseInputHandler;
     private Evaluator evaluator;
+    private UIManager uiManager;
 
-    // ゲームの結果を表す列挙型
-    public enum GameResult {
-        None,
-        SenteWin,
-        GoteWin
-    }
+    [SerializeField]
+    private GameObject[] goteKomas;
 
 
     void Start() {
-        isGameOver = false;
         state = new State(new Banmen(), new Mochigoma(3, 3, 2, 2, 1, 1), new Mochigoma(-3, -3, -2, -2, -1, -1));
         state.UpdateAvailablePositionsList();
 
@@ -41,8 +27,13 @@ public class GameController : MonoBehaviour {
             return;
         }
         mouseInputHandler = mouseInputHandlerObject.GetComponent<MouseInputHandler>();
-        mouseInputHandler.Initialize(this);
-        evaluator = new Evaluator(this);
+        mouseInputHandler.Initialize(this);//このへんの初期化、統一できないのか
+        //evaluator = new Evaluator(this);
+        evaluator = new Evaluator();
+        uiManager = GameObject.Find("UIManager").GetComponent<UIManager>();
+
+
+
 
         if (goteKomas == null || goteKomas.Length == 0) {
             Debug.LogError("goteKomas array is not initialized or empty.");
@@ -53,7 +44,12 @@ public class GameController : MonoBehaviour {
     }
 
     void Update() {
-        if (isGameOver) return;
+        if (state.IsGameOver()) {
+            GameResult result = state.CheckGameOver();
+            uiManager.SetResultText(result.ToString());
+            this.enabled = false; // Updateメソッドの実行を停止
+            return;
+        } 
 
         if (!state.isSenteTurn()) {
             HandleAITurn();
@@ -74,6 +70,12 @@ public class GameController : MonoBehaviour {
     }
 
     void HandleAITurn() {
+
+        // ゲームオーバーのチェックを追加
+        if (state.IsGameOver()) {
+            Debug.Log("ゲームオーバーしているのでこれ以降の処理は行いません。");
+            return;
+        }
         state.UpdateAvailablePositionsList();
         Node newNode = getNext(state, 3);
 
@@ -88,7 +90,9 @@ public class GameController : MonoBehaviour {
         UpdateMochigoma(state, newNode.op);
 
         //勝利判定
-        CheckForWin();
+        //CheckForWin();
+        state.CheckGameOver();
+        
     }
 
     
@@ -223,34 +227,7 @@ public class GameController : MonoBehaviour {
         Debug.Log(senteMochigoma + "\n" + goteMochigoma);
     }
 
-    //勝利判定を行う関数
-    public GameResult CheckWinner(State state) {
-        var (senteArray, goteArray) = CreateBinaryArrays(state);
-
-        if (HasWinningLine(senteArray)) {
-            return GameResult.SenteWin;
-        }
-        else if (HasWinningLine(goteArray)) {
-            return GameResult.GoteWin;
-        }
-        return GameResult.None;
-    }
-
-    //ビンゴラインが揃っているかどうかを判定する関数
-    private bool HasWinningLine(int[,] array) {
-        for (int i = 0; i < 3; i++) {
-            if ((array[i, 0] == 1 && array[i, 1] == 1 && array[i, 2] == 1) ||
-                (array[0, i] == 1 && array[1, i] == 1 && array[2, i] == 1)) {
-                return true;
-            }
-        }
-
-        if ((array[0, 0] == 1 && array[1, 1] == 1 && array[2, 2] == 1) ||
-            (array[0, 2] == 1 && array[1, 1] == 1 && array[2, 0] == 1)) {
-            return true;
-        }
-        return false;
-    }
+    
 
     // 現在の盤面の状態を3×3の二次元配列に変換し、ログに出力する関数
     void PrintCurrentBanmen(State state) {//合格。疎結合になっている
@@ -288,9 +265,16 @@ public class GameController : MonoBehaviour {
         foreach (var koma in mochigoma) {
             for (int pos = 0; pos < board.Count; pos++) {
                 List<int> cell = board[pos];
-                int targetPiece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
+                // cellが空でないことを確認
+                if (cell.Count > 0) {
+                    int targetPiece = cell[cell.Count - 1]; // 最後の要素が現在の駒のサイズ
 
-                if (targetPiece == 0 || CanCoverPiece(koma, targetPiece)) {
+                    if (targetPiece == 0 || CanCoverPiece(koma, targetPiece)) {
+                        operators.Add(new Operator(pos, koma));
+                    }
+                }
+                else {
+                    // cellが空の場合、駒を置くことができる
                     operators.Add(new Operator(pos, koma));
                 }
             }
@@ -372,34 +356,18 @@ public class GameController : MonoBehaviour {
         }
 
         List<int> targetStack = banmen[targetPos];
-        int targetPiece = targetStack[targetStack.Count - 1];
-        if (targetPiece == 0 || CanCoverPiece(op.KomaSize(), targetPiece)) {
+        // targetStackが空でないことを確認
+        if (targetStack.Count > 0) {
+            int targetPiece = targetStack[targetStack.Count - 1];
+            if (targetPiece == 0 || CanCoverPiece(op.KomaSize(), targetPiece)) {
+                return true;
+            }
+        }
+        else {
+            // targetStackが空の場合、駒を置くことができる
             return true;
         }
         return false;
-    }
-
-    //勝利判定のために、自分の駒を1、それ以外を0とした二次元配列を返す関数
-    private (int[,], int[,]) CreateBinaryArrays(State state) {
-        int[,] senteArray = new int[3, 3];
-        int[,] goteArray = new int[3, 3];
-        List<List<int>> banmen = state.banmen.GetBanmen();
-
-        for (int i = 0; i < banmen.Count; i++) {
-            int lastElement = 0;
-            if (banmen[i].Count > 0) {
-                lastElement = banmen[i][banmen[i].Count - 1];
-            }
-
-            if (lastElement > 0) {
-                senteArray[i / 3, i % 3] = 1;
-            }
-            else if (lastElement < 0) {
-                goteArray[i / 3, i % 3] = 1;
-            }
-        }
-
-        return (senteArray, goteArray);
     }
 
 
@@ -433,7 +401,7 @@ public class GameController : MonoBehaviour {
 
     int Minimax(Node node, int depth, bool isMaximizingPlayer) {
         // 探索の深さが0またはゲームが終了している場合、評価値を返す
-        if (depth == 0 || IsGameOver(node.state)) {
+        if (depth == 0 || node.state.IsGameOver()) {
             int evaluation = evaluator.Evaluate(node);
             node.SetEval(evaluation);
             return node.Eval();
@@ -454,7 +422,7 @@ public class GameController : MonoBehaviour {
                 node.AddChild(childNode);
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
-                if (CheckWinner(childState) == GameResult.GoteWin) {
+                if(childState.CheckWinner() == GameResult.GoteWin) {
                     int evaluation = evaluator.Evaluate(childNode);
                     node.SetEval(evaluation);
                     return node.Eval();
@@ -481,7 +449,7 @@ public class GameController : MonoBehaviour {
                 node.AddChild(childNode);
 
                 // 勝利条件を満たす手が見つかった場合、その手を即座に返す
-                if (CheckWinner(childState) == GameResult.SenteWin) {
+                if(childState.CheckWinner() == GameResult.SenteWin) {
                     int evaluation = evaluator.Evaluate(childNode);
                     node.SetEval(evaluation);
                     return node.Eval();
@@ -494,11 +462,6 @@ public class GameController : MonoBehaviour {
             node.SetEval(minEval);
             return minEval;
         }
-    }
-
-    // ゲームが終了しているかどうかを判定する関数
-    bool IsGameOver(State state) {
-        return CheckWinner(state) != GameResult.None;
     }
 
     // 現在の状態から可能なすべての手を生成する関数
@@ -530,16 +493,5 @@ public class GameController : MonoBehaviour {
             }
         }
         return possibleMoves;
-    }
-
-    // 勝利判定の処理をメソッドとして分離
-    public void CheckForWin() {
-        GameResult result = CheckWinner(state);
-        if (result != GameResult.None) {
-            Debug.Log($"勝利判定: {result}");
-            resultText.text = result.ToString();
-            PrintCurrentBanmen(state);
-            isGameOver = true;
-        }
     }
 }

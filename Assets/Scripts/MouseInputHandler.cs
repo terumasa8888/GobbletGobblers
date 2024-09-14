@@ -30,7 +30,6 @@ public class MouseInputHandler : MonoBehaviour {
         RaycastHit hit;
         Debug.DrawRay(ray.origin, ray.direction * 100, Color.red, 5.0f);
 
-        //if (Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
         if (!Physics.Raycast(ray, out hit, Mathf.Infinity, komaLayer)) {
             return;
         }
@@ -77,12 +76,8 @@ public class MouseInputHandler : MonoBehaviour {
         List<List<int>> banmen = state.banmen.GetBanmen();
         banmen[komaPos].RemoveAt(banmen[komaPos].Count - 1);
 
-        // 新しいStateを作成してApplyMoveを呼び出す
-        //State newState = new State(state.banmen, state.sente, state.gote);
-        //gameController.ApplyMove(newState);
-
         //勝利判定
-        gameController.CheckForWin();
+        state.CheckGameOver();
     }
 
     // マウスカーソルの位置に駒を追従させる関数
@@ -111,7 +106,6 @@ public class MouseInputHandler : MonoBehaviour {
         if (selectedKoma == null) {
             return;
         }
-        //state = gameController.GetState();
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
@@ -120,8 +114,6 @@ public class MouseInputHandler : MonoBehaviour {
         if (Physics.Raycast(ray, out hit, Mathf.Infinity, positionLayer)) {
             state.UpdateLastElementsArray();
             PlaceSelectedKomaOnPosition(hit);
-            //gameController.UpdateMochigoma(state, op);
-            //Debug.Log("ターン数: " + state.Turn());
         }
         selectedKoma = null;
     }
@@ -200,10 +192,9 @@ public class MouseInputHandler : MonoBehaviour {
 
         State newState = gameController.Put(state, op);
         gameController.UpdateMochigoma(newState, op);
+        newState.CheckGameOver();
         gameController.ApplyMove(newState);
-
-        //勝利判定
-        gameController.CheckForWin();
+        
     }
 
     // 駒を元の位置に戻す処理を共通化
