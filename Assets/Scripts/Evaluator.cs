@@ -2,35 +2,41 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using static GameController;
 
-public class Evaluator
-{
-    private GameController gameController;
-    public Evaluator(GameController gameController) {
-        this.gameController = gameController;
-    }
+public class Evaluator {
+    private static readonly int WIN_SCORE = 1000;
+    private static readonly int LOSE_SCORE = -10000;
+    private static readonly int COVERING_MOVE_SCORE = 150;
+    private static readonly int BLOCKED_REACH_SCORE = 150;
+    private static readonly int REACH_SCORE = 25;
+
+    //中央の位置に対するスコア
+    private static readonly int CENTER_SCORE = 200;
+    //四隅の位置に対するスコア
+    private static readonly int CORNER_SCORE = 100;
+    //四隅と中央以外の位置に対するスコア
+    private static readonly int OTHER_SCORE = 50;
 
     public int Evaluate(Node node) {
         State currentState = node.state;
         State parentState = node.parentState;
         int evaluation = 0;
 
-        GameResult result = gameController.CheckWinner(currentState);
+        GameResult result = currentState.CheckWinner();
         if (result == GameResult.GoteWin) {
-            evaluation += 1000;
+            evaluation += WIN_SCORE;
         }
         if (result == GameResult.SenteWin) {
-            evaluation -= 10000;
+            evaluation += LOSE_SCORE;
         }
         if (CheckCoveringMove(currentState, node.op)) {
-            evaluation += 150;
+            evaluation += COVERING_MOVE_SCORE;
         }
         int blockedReaches = CountBlockedReaches(parentState, currentState);
-        evaluation += blockedReaches * 150;
+        evaluation += blockedReaches * BLOCKED_REACH_SCORE;
 
         int goteReachCount = CountReach(currentState).goteReachCount;
-        evaluation += goteReachCount * 25;
+        evaluation += goteReachCount * REACH_SCORE;
 
         int positionScore = GetPositionScore(node.op.TargetPos());
         evaluation += positionScore;
@@ -104,9 +110,6 @@ public class Evaluator
         return count == 2 && (emptyCount == 1 || enemyCount == 1);
     }
 
-
-    
-
     //AIがその手がプレイヤーの駒の上から被せる手かどうかを判定する関数
     public bool CheckCoveringMove(State currentState, Operator op) {
 
@@ -163,14 +166,14 @@ public class Evaluator
             case 2:
             case 6:
             case 8:
-                return 100;
+                return CORNER_SCORE;
             case 4:
-                return 200;
+                return CENTER_SCORE;
             case 1:
             case 3:
             case 5:
             case 7:
-                return 50;
+                return OTHER_SCORE;
             default:
                 return 0;
         }
