@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using UnityEditor.iOS.Xcode;
 
 //ゲームの状態を表すクラス
 public class State {
